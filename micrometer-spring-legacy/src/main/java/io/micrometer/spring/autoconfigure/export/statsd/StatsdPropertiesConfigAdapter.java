@@ -70,11 +70,6 @@ public class StatsdPropertiesConfigAdapter extends PropertiesConfigAdapter<Stats
     }
 
     @Override
-    public int queueSize() {
-        return get(StatsdProperties::getQueueSize, StatsdConfig.super::queueSize);
-    }
-
-    @Override
     public boolean publishUnchangedMeters() {
         return get(StatsdProperties::getPublishUnchangedMeters, StatsdConfig.super::publishUnchangedMeters);
     }
