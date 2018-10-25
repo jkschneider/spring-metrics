@@ -15,7 +15,15 @@
  */
 package io.micrometer.core.instrument.util;
 
-public class JsonUtils {
+import java.util.Map;
+
+/**
+ * Utilities for JSON.
+ *
+ * @author Jon Schneider
+ * @author Johnny Lim
+ */
+public final class JsonUtils {
     /**
      * Based on https://stackoverflow.com/a/49564514/510017
      */
@@ -77,4 +85,58 @@ public class JsonUtils {
             stringBuilder.append("  ");
         }
     }
+
+    /**
+     * Convert an object to JSON.
+     *
+     * This method supports only the following types:
+     *
+     * <ul>
+     *   <li><code>Map</code></li>
+     *   <li><code>Boolean</code></li>
+     *   <li><code>Number</code></li>
+     *   <li><code>String</code></li>
+     * </ul>
+     *
+     * @param o object to convert JSON
+     * @return JSON
+     * @throws UnsupportedOperationException if the type of the object is an unlisted type.
+     */
+    public static String toJson(Object o) {
+        return toJson(o, new StringBuilder()).toString();
+    }
+
+    @SuppressWarnings("unchecked")
+    private static StringBuilder toJson(Object o, StringBuilder collector) {
+        if (o == null) {
+            return collector.append("null");
+        }
+        if (o instanceof Boolean || o instanceof Number) {
+            return collector.append(o);
+        }
+        if (o instanceof Number) {
+            return collector.append(DoubleFormat.decimal(((Number) o).doubleValue()));
+        }
+        if (o instanceof String) {
+            return collector.append('"').append(o).append('"');
+        }
+        if (o instanceof Map) {
+            Map<String, Object> map = (Map<String, Object>) o;
+            collector.append('{');
+            if (!map.isEmpty()) {
+                map.forEach((key, value) -> {
+                    collector.append('"').append(key).append("\":");
+                    toJson(value, collector);
+                    collector.append(',');
+                });
+                collector.deleteCharAt(collector.length() - 1);
+            }
+            return collector.append('}');
+        }
+        throw new UnsupportedOperationException("Unsupported class: " + o.getClass());
+    }
+
+    private JsonUtils() {
+    }
+
 }

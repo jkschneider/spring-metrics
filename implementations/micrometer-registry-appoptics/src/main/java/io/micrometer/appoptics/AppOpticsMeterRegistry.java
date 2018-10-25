@@ -19,6 +19,7 @@ import io.micrometer.core.instrument.*;
 import io.micrometer.core.instrument.config.MeterFilter;
 import io.micrometer.core.instrument.distribution.HistogramSnapshot;
 import io.micrometer.core.instrument.step.StepMeterRegistry;
+import io.micrometer.core.instrument.util.JsonUtils;
 import io.micrometer.core.instrument.util.MeterPartition;
 import io.micrometer.core.ipc.http.HttpClient;
 import io.micrometer.core.ipc.http.HttpUrlConnectionClient;
@@ -26,7 +27,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
+
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
@@ -34,7 +39,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.StreamSupport;
 
 import static io.micrometer.core.instrument.Meter.Type.match;
-import static io.micrometer.core.instrument.util.DoubleFormat.decimal;
 import static java.util.stream.Collectors.joining;
 
 /**
@@ -42,6 +46,7 @@ import static java.util.stream.Collectors.joining;
  *
  * @author Hunter Sherman
  * @author Jon Schneider
+ * @author Johnny Lim
  */
 public class AppOpticsMeterRegistry extends StepMeterRegistry {
     private final Logger logger = LoggerFactory.getLogger(AppOpticsMeterRegistry.class);
@@ -114,23 +119,23 @@ public class AppOpticsMeterRegistry extends StepMeterRegistry {
 
     private Optional<String> writeMeter(Meter meter) {
         return Optional.of(StreamSupport.stream(meter.measure().spliterator(), false)
-                .map(ms -> write(meter.getId().withTag(ms.getStatistic()), null, Fields.Value.tag(), decimal(ms.getValue())))
+                .map(ms -> write(meter.getId().withTag(ms.getStatistic()), null, Fields.Value.tag(), ms.getValue()))
                 .collect(joining(",")));
     }
 
     private Optional<String> writeGauge(Gauge gauge) {
-        return Optional.of(write(gauge.getId(), "gauge", Fields.Value.tag(), decimal(gauge.value())));
+        return Optional.of(write(gauge.getId(), "gauge", Fields.Value.tag(), gauge.value()));
     }
 
     private Optional<String> writeTimeGauge(TimeGauge timeGauge) {
-        return Optional.of(write(timeGauge.getId(), "timeGauge", Fields.Value.tag(), decimal(timeGauge.value(getBaseTimeUnit()))));
+        return Optional.of(write(timeGauge.getId(), "timeGauge", Fields.Value.tag(), timeGauge.value(getBaseTimeUnit())));
     }
 
     @Nullable
     private Optional<String> writeCounter(Counter counter) {
         if (counter.count() > 0) {
             // can't use "count" field because sum is required whenever count is set.
-            return Optional.of(write(counter.getId(), "counter", Fields.Value.tag(), decimal(counter.count())));
+            return Optional.of(write(counter.getId(), "counter", Fields.Value.tag(), counter.count()));
         }
         return Optional.empty();
     }
@@ -139,7 +144,7 @@ public class AppOpticsMeterRegistry extends StepMeterRegistry {
     private Optional<String> writeFunctionCounter(FunctionCounter counter) {
         if (counter.count() > 0) {
             // can't use "count" field because sum is required whenever count is set.
-            return Optional.of(write(counter.getId(), "functionCounter", Fields.Value.tag(), decimal(counter.count())));
+            return Optional.of(write(counter.getId(), "functionCounter", Fields.Value.tag(), counter.count()));
         }
         return Optional.empty();
     }
@@ -148,8 +153,8 @@ public class AppOpticsMeterRegistry extends StepMeterRegistry {
     private Optional<String> writeFunctionTimer(FunctionTimer timer) {
         if (timer.count() > 0) {
             return Optional.of(write(timer.getId(), "functionTimer",
-                    Fields.Count.tag(), decimal(timer.count()),
-                    Fields.Sum.tag(), decimal(timer.totalTime(getBaseTimeUnit()))));
+                    Fields.Count.tag(), timer.count(),
+                    Fields.Sum.tag(), timer.totalTime(getBaseTimeUnit())));
         }
         return Optional.empty();
     }
@@ -159,9 +164,9 @@ public class AppOpticsMeterRegistry extends StepMeterRegistry {
         HistogramSnapshot snapshot = timer.takeSnapshot();
         if (snapshot.count() > 0) {
             return Optional.of(write(timer.getId(), "timer",
-                    Fields.Count.tag(), decimal(snapshot.count()),
-                    Fields.Sum.tag(), decimal(snapshot.total(getBaseTimeUnit())),
-                    Fields.Max.tag(), decimal(snapshot.max(getBaseTimeUnit()))));
+                    Fields.Count.tag(), snapshot.count(),
+                    Fields.Sum.tag(), snapshot.total(getBaseTimeUnit()),
+                    Fields.Max.tag(), snapshot.max(getBaseTimeUnit())));
         }
         return Optional.empty();
     }
@@ -171,9 +176,9 @@ public class AppOpticsMeterRegistry extends StepMeterRegistry {
         HistogramSnapshot snapshot = summary.takeSnapshot();
         if (snapshot.count() > 0) {
             return Optional.of(write(summary.getId(), "distributionSummary",
-                    Fields.Count.tag(), decimal(summary.count()),
-                    Fields.Sum.tag(), decimal(summary.totalAmount()),
-                    Fields.Max.tag(), decimal(summary.max())));
+                    Fields.Count.tag(), summary.count(),
+                    Fields.Sum.tag(), summary.totalAmount(),
+                    Fields.Max.tag(), summary.max()));
         }
         return Optional.empty();
     }
@@ -182,47 +187,44 @@ public class AppOpticsMeterRegistry extends StepMeterRegistry {
     private Optional<String> writeLongTaskTimer(LongTaskTimer timer) {
         if (timer.activeTasks() > 0) {
             return Optional.of(write(timer.getId(), "longTaskTimer",
-                    Fields.Count.tag(), decimal(timer.activeTasks()),
-                    Fields.Sum.tag(), decimal(timer.duration(getBaseTimeUnit()))));
+                    Fields.Count.tag(), timer.activeTasks(),
+                    Fields.Sum.tag(), timer.duration(getBaseTimeUnit())));
         }
         return Optional.empty();
     }
 
-    private String write(Meter.Id id, @Nullable String type, String... statistics) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("{\"name\":\"").append(getConventionName(id)).append("\",\"period\":").append(config.step().getSeconds());
+    // VisibleForTesting
+    String write(Meter.Id id, @Nullable String type, Object... statistics) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("name", getConventionName(id));
+        map.put("period", config.step().getSeconds());
 
         if (!"value".equals(statistics[0])) {
-            sb.append(",\"attributes\":{\"aggregate\":false}");
+            map.put("attributes", Collections.singletonMap("aggregate", false));
         }
-
         for (int i = 0; i < statistics.length; i += 2) {
-            sb.append(",\"").append(statistics[i]).append("\":").append(statistics[i + 1]);
+            map.put((String) statistics[i], statistics[i + 1]);
         }
-        List<Tag> tags = id.getTags();
 
-        sb.append(",\"tags\":{");
+        Map<String, Object> tagMap = new LinkedHashMap<>();
         if (type != null) {
             // appoptics requires at least one tag for every metric, so we hang something here that may be useful.
-            sb.append("\"_type\":\"").append(type).append('"');
-            if (!tags.isEmpty())
-                sb.append(",");
+            tagMap.put("_type", type);
         }
+        id.getTags().forEach(tag -> tagMap.put(getTagKey(tag.getKey()), getTagValue(tag.getValue())));
+        map.put("tags", tagMap);
+        return JsonUtils.toJson(map);
+    }
 
-        if (!tags.isEmpty()) {
-            sb.append(tags.stream()
-                    .map(tag -> {
-                        String key = tag.getKey();
-                        if (key.equals(config.hostTag())) {
-                            key = "host_hostname_alias";
-                        }
-                        return "\"" + config().namingConvention().tagKey(key) + "\":\"" +
-                                config().namingConvention().tagValue(tag.getValue()) + "\"";
-                    })
-                    .collect(joining(",")));
+    private String getTagKey(String key) {
+        if (key.equals(config.hostTag())) {
+            key = "host_hostname_alias";
         }
-        sb.append("}}");
-        return sb.toString();
+        return config().namingConvention().tagKey(key);
+    }
+
+    private String getTagValue(String value) {
+        return config().namingConvention().tagValue(value);
     }
 
     /**
