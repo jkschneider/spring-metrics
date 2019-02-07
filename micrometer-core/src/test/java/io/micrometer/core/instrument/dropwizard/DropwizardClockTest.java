@@ -15,31 +15,29 @@
  */
 package io.micrometer.core.instrument.dropwizard;
 
-import org.junit.jupiter.api.Test;
+import io.micrometer.core.instrument.MockClock;
 
-import java.util.function.Supplier;
+import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Tests for {@link DelegatingDropwizardLongGauge}
+ * Tests for {@link DropwizardClock}
  *
  * @author Oleksii Bondar
  */
-class DelegatingDropwizardLongGaugeTest {
+class DropwizardClockTest {
 
-    private DelegatingDropwizardLongGauge gauge = new DelegatingDropwizardLongGauge();
+    private MockClock clock = new MockClock();
+    private DropwizardClock dropwizardClock = new DropwizardClock(clock);
 
     @Test
-    void returnValueFromDefaultDelegate() {
-        assertThat(gauge.getValue()).isEqualTo(0);
+    void returnTick() {
+        assertThat(dropwizardClock.getTick()).isEqualTo(clock.monotonicTime());
     }
 
     @Test
-    void returnValueFromCustomDelegate() {
-        long expectedValue = 10l;
-        Supplier<Long> supplier = () -> expectedValue;
-        gauge.setDelegate(supplier);
-        assertThat(gauge.getValue()).isEqualTo(expectedValue);
+    void returnTime() {
+        assertThat(dropwizardClock.getTime()).isEqualTo(clock.wallTime());
     }
 }
