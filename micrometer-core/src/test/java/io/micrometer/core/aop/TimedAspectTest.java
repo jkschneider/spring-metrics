@@ -67,8 +67,46 @@ class TimedAspectTest {
                     .tag("extra", "tag")
                     .timer();
         });
-        
-        
+
+
+    }
+
+    @Test
+    void timeClass() {
+        MeterRegistry registry = new SimpleMeterRegistry();
+
+        AspectJProxyFactory pf = new AspectJProxyFactory(new TimedClass());
+        pf.addAspect(new TimedAspect(registry));
+
+        TimedClass service = pf.getProxy();
+
+        service.call();
+
+        assertThat(registry.get("call")
+                .tag("class", "io.micrometer.core.aop.TimedAspectTest$TimedClass")
+                .tag("method", "call")
+                .tag("extra", "tag")
+                .timer().count()).isEqualTo(1);
+    }
+
+    @Test
+    void timeClassFailure() {
+        MeterRegistry failingRegistry = new FailingMeterRegistry();
+
+        AspectJProxyFactory pf = new AspectJProxyFactory(new TimedClass());
+        pf.addAspect(new TimedAspect(failingRegistry));
+
+        TimedClass service = pf.getProxy();
+
+        service.call();
+
+        assertThatExceptionOfType(MeterNotFoundException.class).isThrownBy(() -> {
+            failingRegistry.get("call")
+                    .tag("class", "io.micrometer.core.aop.TimedAspectTest$TimedClass")
+                    .tag("method", "call")
+                    .tag("extra", "tag")
+                    .timer();
+        });
     }
 
     private final class FailingMeterRegistry extends SimpleMeterRegistry {
@@ -87,6 +125,12 @@ class TimedAspectTest {
 
     static class TimedService {
         @Timed(value = "call", extraTags = {"extra", "tag"})
+        void call() {
+        }
+    }
+
+    @Timed(value = "call", extraTags = {"extra", "tag"})
+    static class TimedClass {
         void call() {
         }
     }
