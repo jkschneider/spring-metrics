@@ -28,6 +28,7 @@ import static java.util.stream.Collectors.toList;
 /**
  * @author Jon Schneider. I promise, this was not a fun class to write. Be glad it wasn't you :)
  */
+@SuppressWarnings("serial")
 public class MeterNotFoundException extends RuntimeException {
     private static final String OK = "OK:";
     private static final String NOT_OK = "FAIL:";

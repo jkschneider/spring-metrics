@@ -74,7 +74,7 @@ interface GaugeTest {
     @Test
     @DisplayName("gauges that reference an object that is garbage collected report NaN")
     default void garbageCollectedSourceObject(MeterRegistry registry) {
-        registry.gauge("my.gauge", emptyList(), (Map) null, Map::size);
+        registry.gauge("my.gauge", emptyList(), (Map<?, ?>) null, Map::size);
         assertThat(registry.get("my.gauge").gauge().value()).matches(val -> val == null || Double.isNaN(val) || val == 0.0);
     }
 

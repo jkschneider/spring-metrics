@@ -289,13 +289,15 @@ class StatsdMeterRegistryTest {
     @Test
     void counterIncrementDoesNotCauseStackOverflow() {
         StatsdMeterRegistry registry = new StatsdMeterRegistry(configWithFlavor(StatsdFlavor.ETSY), clock);
-        new LogbackMetrics().bindTo(registry);
+        try (LogbackMetrics logbackMetrics = new LogbackMetrics()) {
+            logbackMetrics.bindTo(registry);
 
-        // Cause the processor to get into a state that would make it perform logging at DEBUG level.
-        ((Logger) LoggerFactory.getLogger(Operators.class)).setLevel(Level.DEBUG);
-        registry.processor.onComplete();
+            // Cause the processor to get into a state that would make it perform logging at DEBUG level.
+            ((Logger) LoggerFactory.getLogger(Operators.class)).setLevel(Level.DEBUG);
+            registry.processor.onComplete();
 
-        registry.counter("my.counter").increment();
+            registry.counter("my.counter").increment();
+        }
     }
 
     @ParameterizedTest

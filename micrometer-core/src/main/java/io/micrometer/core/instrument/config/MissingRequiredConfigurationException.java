@@ -18,6 +18,7 @@ package io.micrometer.core.instrument.config;
 /**
  * Signals that a piece of required configuration has not been provided.
  */
+@SuppressWarnings("serial")
 public class MissingRequiredConfigurationException extends IllegalStateException {
     public MissingRequiredConfigurationException(String s) {
         super(s);

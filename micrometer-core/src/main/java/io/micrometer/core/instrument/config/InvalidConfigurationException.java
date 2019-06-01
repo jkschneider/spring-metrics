@@ -18,6 +18,7 @@ package io.micrometer.core.instrument.config;
 /**
  * Signals that a piece of provided configuration is not acceptable for some reason. For example negative SLA boundaries.
  */
+@SuppressWarnings("serial")
 public class InvalidConfigurationException extends IllegalStateException {
     public InvalidConfigurationException(String s) {
         super(s);

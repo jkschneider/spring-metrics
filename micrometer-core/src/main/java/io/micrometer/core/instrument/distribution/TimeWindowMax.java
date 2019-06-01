@@ -28,7 +28,6 @@ import java.util.concurrent.atomic.AtomicLong;
  * @author Jon Schneider
  */
 public class TimeWindowMax {
-    @SuppressWarnings("rawtypes")
     private static final AtomicIntegerFieldUpdater<TimeWindowMax> rotatingUpdater =
             AtomicIntegerFieldUpdater.newUpdater(TimeWindowMax.class, "rotating");
 

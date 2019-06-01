@@ -309,6 +309,8 @@ public interface HttpSender {
                 case INFORMATIONAL:
                 case SUCCESS:
                     onSuccess.accept(this);
+                default:
+                    break;
             }
             return this;
         }
@@ -318,6 +320,8 @@ public interface HttpSender {
                 case CLIENT_ERROR:
                 case SERVER_ERROR:
                     onError.accept(this);
+                default:
+                    break;
             }
             return this;
         }
