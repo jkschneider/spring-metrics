@@ -62,7 +62,7 @@ public abstract class MeterRegistry implements AutoCloseable {
     private final More more = new More();
     private volatile PMap<Id, Meter> meterMap = HashTreePMap.empty();
     private final AtomicBoolean closed = new AtomicBoolean(false);
-    private PauseDetector pauseDetector = new NoPauseDetector();
+    private volatile PauseDetector pauseDetector = new NoPauseDetector();
 
     /**
      * We'll use snake case as a general-purpose default for registries because it is the most
@@ -71,7 +71,7 @@ public abstract class MeterRegistry implements AutoCloseable {
      * subtraction in some (including Prometheus), and '.' is used to flatten tags into hierarchical
      * names when shipping metrics to hierarchical backends such as Graphite.
      */
-    private NamingConvention namingConvention = NamingConvention.snakeCase;
+    private volatile NamingConvention namingConvention = NamingConvention.snakeCase;
 
     protected MeterRegistry(Clock clock) {
         requireNonNull(clock);
