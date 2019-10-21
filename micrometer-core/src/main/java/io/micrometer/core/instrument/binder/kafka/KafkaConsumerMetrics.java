@@ -48,7 +48,9 @@ import static java.util.Collections.emptyList;
  * @author Johnny Lim
  * @see <a href="https://docs.confluent.io/current/kafka/monitoring.html">Kakfa monitoring documentation</a>
  * @since 1.1.0
+ * @deprecated since 1.X.0 in favor of {@link KafkaConsumerApiMetrics}
  */
+@Deprecated
 @Incubating(since = "1.1.0")
 @NonNullApi
 @NonNullFields

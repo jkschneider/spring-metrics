@@ -16,6 +16,7 @@
 package io.micrometer.core.instrument;
 
 import io.micrometer.core.instrument.composite.CompositeMeterRegistry;
+import io.micrometer.core.instrument.search.Search;
 import io.micrometer.core.lang.Nullable;
 
 import java.util.Collection;
@@ -35,6 +36,9 @@ public class Metrics {
     public static final CompositeMeterRegistry globalRegistry = new CompositeMeterRegistry();
     private static final More more = new More();
 
+    private Metrics() {
+    }
+
     /**
      * Add a registry to the global composite registry.
      *
@@ -52,6 +56,26 @@ public class Metrics {
      */
     public static void removeRegistry(MeterRegistry registry) {
         globalRegistry.remove(registry);
+    }
+    
+    /**
+     * Searches metric by name. If no metric satisfying search, returns null
+     * 
+     * @param metricName - metric name used for search
+     * @return search by provided criteria
+     */
+    public static Search find(String metricName) {
+        return globalRegistry.find(metricName);
+    }
+
+    /**
+     * Removes meter from global registry
+     * 
+     * @param meter to remove
+     * @return removed Meter, or null if not registered
+     */
+    public static Meter remove(Meter meter) {
+        return globalRegistry.remove(meter);
     }
 
     /**

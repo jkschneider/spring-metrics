@@ -1,5 +1,5 @@
 /**
- * Copyright 2017 Pivotal Software, Inc.
+ * Copyright 2019 Pivotal Software, Inc.
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,11 +17,21 @@ package io.micrometer.core.instrument;
 
 import io.micrometer.core.instrument.simple.SimpleConfig;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+
 import org.junit.jupiter.api.Test;
+
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * Tests for {@link Metrics}.
+ * 
+ * @author Jon Schneider
+ * @author Oleksii Bondar
+ */
 class MetricsTest {
+
     @Test
     void staticMetricsAreInitiallyNoop() {
         // doesn't blow up
@@ -39,5 +49,30 @@ class MetricsTest {
         counter.increment();
 
         assertThat(Metrics.globalRegistry.get("counter").counter().count()).isEqualTo(1.0);
+    }
+
+    @Test
+    void exposeConvenienceApiToFindMeterByName() {
+        String metricName = UUID.randomUUID().toString();
+        Counter counter = Metrics.counter(metricName);
+        counter.increment();
+
+        assertThat(Metrics.find(metricName).counter()).isNotNull();
+    }
+
+    @Test
+    void exposeConvenienceApiForRemovingMeter() {
+        String metricName = UUID.randomUUID().toString();
+        Counter counter = Metrics.counter(metricName);
+        counter.increment();
+
+        // verify that metric registered
+        assertThat(Metrics.find(metricName).counter()).isNotNull();
+
+        // verify successful removal
+        assertThat(Metrics.remove(counter)).isNotNull();
+
+        // search should return null since remove
+        assertThat(Metrics.find(metricName).counter()).isNull();
     }
 }

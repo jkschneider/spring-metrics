@@ -33,10 +33,12 @@ import java.util.Collections;
 
 /**
  * Configuration for {@link KafkaConsumerMetrics}.
+ * @deprecated since 1.X.0 in favor of {@link io.micrometer.core.instrument.binder.kafka.KafkaConsumerApiMetrics}
  *
  * @author Wardha Perinkadakattu
  * @author Chin Huang
  */
+@Deprecated
 @Configuration
 @AutoConfigureAfter({ MetricsAutoConfiguration.class, JmxAutoConfiguration.class })
 @ConditionalOnClass(KafkaConsumerMetrics.class)

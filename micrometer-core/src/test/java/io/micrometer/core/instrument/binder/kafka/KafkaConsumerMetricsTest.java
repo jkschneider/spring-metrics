@@ -32,6 +32,7 @@ import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+@SuppressWarnings("deprecation")
 class KafkaConsumerMetricsTest {
     private final static String TOPIC = "my-example-topic";
     private final static String BOOTSTRAP_SERVERS = "localhost:9092";

@@ -45,6 +45,9 @@ dependencies {
     // log monitoring
     compile 'ch.qos.logback:logback-classic:1.2.+', optional
     compile 'org.apache.logging.log4j:log4j-core:2.+', optional
+    
+    // kafka
+    compile 'org.apache.kafka:kafka-clients:2.+' , optional
 
     // reactor
     compile 'io.projectreactor:reactor-core:latest.release', optional
@@ -82,8 +85,6 @@ dependencies {
     testCompile 'org.assertj:assertj-core:latest.release'
 
     testCompile 'org.ehcache:ehcache:latest.release'
-
-    testCompile 'org.apache.kafka:kafka-clients:latest.release'
 
     testCompile 'ru.lanwen.wiremock:wiremock-junit5:1.2.0'
     testCompile 'com.github.tomakehurst:wiremock:latest.release'
