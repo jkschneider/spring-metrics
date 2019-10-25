@@ -57,6 +57,8 @@ dependencies {
 
     compile 'org.mongodb:mongo-java-driver:latest.release', optional
 
+    compile 'com.couchbase.client:java-client:latest.release', optional
+
     testCompile 'io.projectreactor:reactor-test:latest.release'
 
     // JUnit 5
