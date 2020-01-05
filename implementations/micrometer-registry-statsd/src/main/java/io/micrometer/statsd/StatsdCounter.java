@@ -41,7 +41,7 @@ public class StatsdCounter extends AbstractMeter implements Counter {
     public void increment(double amount) {
         if (!shutdown && amount > 0) {
             count.add(amount);
-            subscriber.onNext(lineBuilder.count((long) amount));
+            subscriber.onNext(lineBuilder.count(count.longValue()));
         }
     }
 
