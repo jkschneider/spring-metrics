@@ -207,7 +207,13 @@ public class DatadogMeterRegistry extends StepMeterRegistry {
                 .map(ms -> {
                     Meter.Id id = m.getId().withTag(ms.getStatistic());
                     addToMetadataList(metadata, id, null, ms.getStatistic(), null);
-                    return writeMetric(id, null, wallTime, ms.getValue());
+                    double value = 0d;
+                    try {
+                        value = ms.getValue();
+                    } catch (RuntimeException e) {
+                        // eat it
+                    }
+                    return writeMetric(id, null, wallTime, value);
                 });
     }
 
