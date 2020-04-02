@@ -17,10 +17,13 @@ package io.micrometer.statsd.internal;
 
 import io.micrometer.core.Issue;
 import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Statistic;
 import io.micrometer.core.instrument.config.NamingConvention;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import io.micrometer.statsd.StatsdConfig;
+import io.micrometer.statsd.datadog.DataDogStatsdConfig;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -31,7 +34,7 @@ class DatadogStatsdLineBuilderTest {
     @Test
     void changingNamingConvention() {
         Counter c = registry.counter("my.counter", "my.tag", "value");
-        DatadogStatsdLineBuilder lb = new DatadogStatsdLineBuilder(c.getId(), registry.config());
+        DatadogStatsdLineBuilder lb = new DatadogStatsdLineBuilder(c.getId(), StatsdConfig.DEFAULT, registry.config());
 
         registry.config().namingConvention(NamingConvention.dot);
         assertThat(lb.line("1", Statistic.COUNT, "c")).isEqualTo("my.counter:1|c|#statistic:count,my.tag:value");
@@ -44,9 +47,38 @@ class DatadogStatsdLineBuilderTest {
     @Test
     void sanitizeColons() {
         Counter c = registry.counter("my:counter", "my:tag", "my:value");
-        DatadogStatsdLineBuilder lb = new DatadogStatsdLineBuilder(c.getId(), registry.config());
+        DatadogStatsdLineBuilder lb = new DatadogStatsdLineBuilder(c.getId(), StatsdConfig.DEFAULT, registry.config());
 
         registry.config().namingConvention(NamingConvention.dot);
         assertThat(lb.line("1", Statistic.COUNT, "c")).isEqualTo("my_counter:1|c|#statistic:count,my_tag:my_value");
+    }
+
+    @Issue("#1056")
+    @Test
+    void publishDistributions() {
+        DistributionSummary ds = registry.summary("summary", "tag", "value");
+
+        // record as histogram
+        DatadogStatsdLineBuilder lbh = new DatadogStatsdLineBuilder(
+                ds.getId(),
+                DataDogStatsdConfig.DEFAULT,
+                registry.config()
+        );
+        assertThat(lbh.histogram(1.0)).isEqualTo("summary:1|h|#tag:value");
+
+        // record as distribution
+        StatsdConfig config = new DataDogStatsdConfig() {
+            @Override
+            public boolean publishDistributions() {
+                return true;
+            }
+
+            @Override
+            public String get(String key) {
+                return null;
+            }
+        };
+        DatadogStatsdLineBuilder lbd = new DatadogStatsdLineBuilder(ds.getId(), config, registry.config());
+        assertThat(lbd.histogram(1.0)).isEqualTo("summary:1|d|#tag:value");
     }
 }

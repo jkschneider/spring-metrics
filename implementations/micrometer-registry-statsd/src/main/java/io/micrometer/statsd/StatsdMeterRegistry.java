@@ -300,7 +300,7 @@ public class StatsdMeterRegistry extends MeterRegistry {
             lineBuilderFunction = id2 -> {
                 switch (statsdConfig.flavor()) {
                     case DATADOG:
-                        return new DatadogStatsdLineBuilder(id2, config());
+                        return new DatadogStatsdLineBuilder(id2, statsdConfig, config());
                     case TELEGRAF:
                         return new TelegrafStatsdLineBuilder(id2, config());
                     case SYSDIG:

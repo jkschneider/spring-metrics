@@ -19,12 +19,17 @@ import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Statistic;
 import io.micrometer.core.instrument.config.NamingConvention;
+import io.micrometer.core.instrument.util.DoubleFormat;
 import io.micrometer.core.lang.Nullable;
+import io.micrometer.statsd.StatsdConfig;
+import io.micrometer.statsd.datadog.DataDogStatsdConfig;
+
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.stream.Collectors;
 
 public class DatadogStatsdLineBuilder extends FlavorStatsdLineBuilder {
+    private static final String TYPE_DISTRIBUTION = "d";
     private final Object conventionTagsLock = new Object();
     @SuppressWarnings({"NullableProblems", "unused"})
     private volatile NamingConvention namingConvention;
@@ -35,9 +40,26 @@ public class DatadogStatsdLineBuilder extends FlavorStatsdLineBuilder {
     @SuppressWarnings("NullableProblems")
     private volatile String tagsNoStat;
     private final ConcurrentMap<Statistic, String> tags = new ConcurrentHashMap<>();
+    private final boolean publishDistributions;
 
-    public DatadogStatsdLineBuilder(Meter.Id id, MeterRegistry.Config config) {
+    public DatadogStatsdLineBuilder(Meter.Id id, StatsdConfig statsdConfig, MeterRegistry.Config config) {
         super(id, config);
+
+        if (statsdConfig instanceof DataDogStatsdConfig) {
+            final DataDogStatsdConfig dataDogStatsdConfig = (DataDogStatsdConfig) statsdConfig;
+            publishDistributions = dataDogStatsdConfig.publishDistributions();
+        } else {
+            publishDistributions = false;
+        }
+    }
+
+    @Override
+    public String histogram(double amount) {
+        if (!publishDistributions) {
+            return super.histogram(amount);
+        }
+
+        return line(DoubleFormat.decimalOrNan(amount), null, TYPE_DISTRIBUTION);
     }
 
     @Override
