@@ -89,12 +89,10 @@ public class ElasticMeterRegistry extends StepMeterRegistry {
             "  }\n" +
             "}";
     private static final String TEMPLATE_BODY_BEFORE_VERSION_7 = "{\"template\":\"metrics*\",\"mappings\":{\"_default_\":{\"_all\":{\"enabled\":false}," + TEMPLATE_PROPERTIES + "}}}";
-    private static final String TEMPLATE_BODY_AFTER_VERSION_7 = "{\n" +
+    static final String TEMPLATE_BODY_AFTER_VERSION_7 = "{\n" +
             "  \"index_patterns\": [\"metrics*\"],\n" +
             "  \"mappings\": {\n" +
-            "    \"_source\": {\n" +
-            "      \"enabled\": false\n" +
-            "    },\n" + TEMPLATE_PROPERTIES +
+            "    \"_source\": {\"enabled\": true},\n" + TEMPLATE_PROPERTIES +
             "  }\n" +
             "}";
 

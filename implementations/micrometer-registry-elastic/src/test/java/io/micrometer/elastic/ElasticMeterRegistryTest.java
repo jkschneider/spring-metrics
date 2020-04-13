@@ -300,4 +300,10 @@ class ElasticMeterRegistryTest {
     }
 
 
+    @Issue("#1629")
+    @Test
+    void verifyTemplateSourceIsEnabledForVersion7() {
+        assertThat(ElasticMeterRegistry.TEMPLATE_BODY_AFTER_VERSION_7).contains("\"_source\": {\"enabled\": true}");
+    }
+
 }
