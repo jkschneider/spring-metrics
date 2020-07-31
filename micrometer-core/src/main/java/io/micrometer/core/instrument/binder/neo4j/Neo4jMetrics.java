@@ -1,3 +1,18 @@
+/**
+ * Copyright 2020 VMware, Inc.
+ * <p>
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * <p>
+ * https://www.apache.org/licenses/LICENSE-2.0
+ * <p>
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package io.micrometer.core.instrument.binder.neo4j;
 
 import io.micrometer.core.instrument.FunctionCounter;
@@ -51,35 +66,51 @@ public class Neo4jMetrics implements MeterBinder {
         return (poolMetrics) -> {
             Iterable<Tag> poolTags = Tags.concat(this.tags, "poolId", poolMetrics.id());
 
-            FunctionCounter.builder(PREFIX + ".acquired", poolMetrics, ConnectionPoolMetrics::acquired).tags(poolTags)
+            // acquisition attempts
+            FunctionCounter.builder(PREFIX + ".acquisition", poolMetrics, ConnectionPoolMetrics::acquired)
+                    .tags(Tags.concat(poolTags, "result", "successful"))
                     .baseUnit(BASE_UNIT_CONNECTIONS).description("The amount of connections that have been acquired.")
                     .register(meterRegistry);
 
-            FunctionCounter.builder(PREFIX + ".closed", poolMetrics, ConnectionPoolMetrics::closed).tags(poolTags)
-                    .baseUnit(BASE_UNIT_CONNECTIONS).description("The amount of connections have been closed.")
+            FunctionCounter
+                    .builder(PREFIX + ".acquisition", poolMetrics, ConnectionPoolMetrics::timedOutToAcquire)
+                    .tags(Tags.concat(poolTags, "result", "timedOutToAcquire"))
+                    .baseUnit(BASE_UNIT_CONNECTIONS)
+                    .description("The amount of failures to acquire a connection from a pool within maximum connection "
+                                    + "acquisition timeout.")
                     .register(meterRegistry);
 
-            FunctionCounter.builder(PREFIX + ".created", poolMetrics, ConnectionPoolMetrics::created).tags(poolTags)
+            // connections successfully created and closed
+            FunctionCounter.builder(PREFIX, poolMetrics, ConnectionPoolMetrics::created)
+                    .tags(Tags.concat(poolTags, "state", "created"))
                     .baseUnit(BASE_UNIT_CONNECTIONS).description("The amount of connections have ever been created.")
                     .register(meterRegistry);
 
-            FunctionCounter.builder(PREFIX + ".failedToCreate", poolMetrics, ConnectionPoolMetrics::failedToCreate)
-                    .tags(poolTags).baseUnit(BASE_UNIT_CONNECTIONS)
+            FunctionCounter.builder(PREFIX, poolMetrics, ConnectionPoolMetrics::closed)
+                    .tags(Tags.concat(poolTags, "state", "closed"))
+                    .baseUnit(BASE_UNIT_CONNECTIONS).description("The amount of connections have been closed.")
+                    .register(meterRegistry);
+
+            // creation attempts
+            FunctionCounter.builder(PREFIX + ".creation", poolMetrics, ConnectionPoolMetrics::created)
+                    .tags(Tags.concat(poolTags, "state", "created"))
+                    .baseUnit(BASE_UNIT_CONNECTIONS).description("The amount of connections have ever been created.")
+                    .register(meterRegistry);
+
+            FunctionCounter.builder(PREFIX + ".creation", poolMetrics, ConnectionPoolMetrics::failedToCreate)
+                    .tags(Tags.concat(poolTags, "state", "failedToCreate"))
+                    .baseUnit(BASE_UNIT_CONNECTIONS)
                     .description("The amount of connections have been failed to create.").register(meterRegistry);
 
-            Gauge.builder(PREFIX + ".idle", poolMetrics, ConnectionPoolMetrics::idle).tags(poolTags)
+            // active pool size
+            Gauge.builder(PREFIX + ".active", poolMetrics, ConnectionPoolMetrics::idle)
+                    .tags(Tags.concat(poolTags, "state", "idle"))
                     .baseUnit(BASE_UNIT_CONNECTIONS).description("The amount of connections that are currently idle.")
                     .register(meterRegistry);
 
-            Gauge.builder(PREFIX + ".inUse", poolMetrics, ConnectionPoolMetrics::inUse).tags(poolTags)
+            Gauge.builder(PREFIX + ".active", poolMetrics, ConnectionPoolMetrics::inUse)
+                    .tags(Tags.concat(poolTags, "state", "inUse"))
                     .baseUnit(BASE_UNIT_CONNECTIONS).description("The amount of connections that are currently in-use.")
-                    .register(meterRegistry);
-
-            FunctionCounter
-                    .builder(PREFIX + ".timedOutToAcquire", poolMetrics, ConnectionPoolMetrics::timedOutToAcquire)
-                    .tags(poolTags).baseUnit(BASE_UNIT_CONNECTIONS)
-                    .description(
-                            "The amount of failures to acquire a connection from a pool within maximum connection acquisition timeout.")
                     .register(meterRegistry);
         };
     }

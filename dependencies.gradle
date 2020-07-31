@@ -65,7 +65,7 @@ def VERSIONS = [
         'org.mockito:mockito-core:latest.release',
         'org.mockito:mockito-inline:latest.release',
         'org.mongodb:mongo-java-driver:latest.release',
-        'org.neo4j.driver:neo4j-java-driver:4.1.+',
+        'org.neo4j.driver:neo4j-java-driver:latest.release',
         'org.slf4j:slf4j-api:1.7.+',
         'org.springframework:spring-context:latest.release',
         'org.testcontainers:junit-jupiter:latest.release',

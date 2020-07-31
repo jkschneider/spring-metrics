@@ -1,3 +1,18 @@
+/**
+ * Copyright 2020 VMware, Inc.
+ * <p>
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * <p>
+ * https://www.apache.org/licenses/LICENSE-2.0
+ * <p>
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package io.micrometer.core.instrument.binder.neo4j;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -39,17 +54,29 @@ public class Neo4jMetricsIntegrationTest {
         Neo4jMetrics metrics = new Neo4jMetrics("neo4jMetrics", driver, Collections.emptyList());
         metrics.bindTo(registry);
 
-        assertThat(registry.get(Neo4jMetrics.PREFIX + ".acquired").functionCounter().count()).isEqualTo(1d);
-        assertThat(registry.get(Neo4jMetrics.PREFIX + ".closed").functionCounter().count()).isEqualTo(0d);
-        assertThat(registry.get(Neo4jMetrics.PREFIX + ".created").functionCounter().count()).isEqualTo(1d);
-        assertThat(registry.get(Neo4jMetrics.PREFIX + ".failedToCreate").functionCounter().count()).isEqualTo(0d);
-        assertThat(registry.get(Neo4jMetrics.PREFIX + ".idle").gauge().value()).isEqualTo(1d);
-        assertThat(registry.get(Neo4jMetrics.PREFIX + ".inUse").gauge().value()).isEqualTo(0d);
-        assertThat(registry.get(Neo4jMetrics.PREFIX + ".timedOutToAcquire").functionCounter().count()).isEqualTo(0d);
+        String connectionAcquisitionName = Neo4jMetrics.PREFIX + ".acquisition";
+        assertThat(registry.get(connectionAcquisitionName).tag("result", "successful").functionCounter().count())
+                .isEqualTo(1d);
+        assertThat(registry.get(connectionAcquisitionName).tag("result", "timedOutToAcquire").functionCounter().count())
+                .isEqualTo(0d);
+
+        String connectionsName = Neo4jMetrics.PREFIX;
+        assertThat(registry.get(connectionsName).tag("state", "created").functionCounter().count()).isEqualTo(1d);
+        assertThat(registry.get(connectionsName).tag("state", "closed").functionCounter().count()).isEqualTo(0d);
+
+        String connectionsCreatedName = Neo4jMetrics.PREFIX + ".creation";
+        assertThat(registry.get(connectionsCreatedName).tag("state", "created").functionCounter().count()).isEqualTo(1d);
+        assertThat(registry.get(connectionsCreatedName).tag("state", "failedToCreate").functionCounter().count())
+                .isEqualTo(0d);
+
+        String connectionsActiveName = Neo4jMetrics.PREFIX + ".active";
+        assertThat(registry.get(connectionsActiveName).tag("state", "idle").gauge().value()).isEqualTo(1d);
+        assertThat(registry.get(connectionsActiveName).tag("state", "inUse").gauge().value()).isEqualTo(0d);
 
         // acquire a new connection
         driver.verifyConnectivity();
-        assertThat(registry.get(Neo4jMetrics.PREFIX + ".acquired").functionCounter().count()).isEqualTo(2d);
+        assertThat(registry.get(connectionAcquisitionName).tag("result", "successful").functionCounter().count())
+                .isEqualTo(2d);
 
         driver.close();
     }
@@ -68,7 +95,9 @@ public class Neo4jMetricsIntegrationTest {
         Neo4jMetrics metrics = new Neo4jMetrics("neo4jMetrics", driver, Collections.emptyList());
         metrics.bindTo(registry);
 
-        assertThat(registry.get(Neo4jMetrics.PREFIX + ".failedToCreate").functionCounter().count()).isEqualTo(1d);
+        String connectionsCreatedName = Neo4jMetrics.PREFIX + ".creation";
+        assertThat(registry.get(connectionsCreatedName).tag("state", "failedToCreate").functionCounter().count())
+                .isEqualTo(1d);
 
         driver.close();
     }
