@@ -57,7 +57,7 @@ def VERSIONS = [
         'org.hibernate:hibernate-entitymanager:latest.release',
         'org.hsqldb:hsqldb:latest.release',
         'org.jooq:jooq:latest.release',
-        'org.jsr107.ri:cache-ri-impl:1.0.0',
+        'org.jsr107.ri:cache-ri-impl:1.1.1',
         'org.junit.jupiter:junit-jupiter:latest.release',
         'org.junit.platform:junit-platform-launcher:latest.release',
         'org.junit.vintage:junit-vintage-engine:latest.release',

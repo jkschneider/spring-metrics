@@ -10,7 +10,7 @@ include 'micrometer-jersey2'
 
 include 'micrometer-test'
 
-['atlas', 'prometheus', 'datadog', 'elastic', 'ganglia', 'graphite', 'health', 'jmx', 'influx', 'statsd', 'new-relic', 'cloudwatch', 'cloudwatch2', 'signalfx', 'wavefront', 'dynatrace', 'azure-monitor', 'humio', 'appoptics', 'kairos', 'stackdriver', 'opentsdb'].each { sys ->
+['atlas', 'prometheus', 'datadog', 'elastic', 'ganglia', 'graphite', 'health', 'jmx', 'influx', 'statsd', 'new-relic', 'cloudwatch', 'cloudwatch2', 'signalfx', 'wavefront', 'dynatrace', 'azure-monitor', 'humio', 'appoptics', 'kairos', 'stackdriver', 'opentsdb', 'opentelemetry'].each { sys ->
     include "micrometer-registry-$sys"
     project(":micrometer-registry-$sys").projectDir = new File(rootProject.projectDir, "implementations/micrometer-registry-$sys")
 }
