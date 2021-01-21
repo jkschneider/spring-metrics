@@ -67,6 +67,7 @@ class MongoMetricsCommandListenerTest extends AbstractMongoDbTest {
 
         Tags tags = Tags.of(
                 "cluster.id", clusterId.get(),
+                "collection", "testCol",
                 "server.address", String.format("%s:%s", HOST, port),
                 "command", "insert",
                 "status", "SUCCESS"
@@ -82,6 +83,7 @@ class MongoMetricsCommandListenerTest extends AbstractMongoDbTest {
 
         Tags tags = Tags.of(
                 "cluster.id", clusterId.get(),
+                "collection", "testCol",
                 "server.address", String.format("%s:%s", HOST, port),
                 "command", "dropIndexes",
                 "status", "FAILED"
