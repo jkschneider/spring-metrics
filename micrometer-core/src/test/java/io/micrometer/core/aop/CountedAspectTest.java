@@ -18,12 +18,16 @@ package io.micrometer.core.aop;
 import io.micrometer.core.annotation.Counted;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Tag;
 import io.micrometer.core.instrument.search.MeterNotFoundException;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import org.aspectj.lang.ProceedingJoinPoint;
 import org.junit.jupiter.api.Test;
 import org.springframework.aop.aspectj.annotation.AspectJProxyFactory;
 
+import java.util.Arrays;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Function;
 
 import static java.util.concurrent.CompletableFuture.supplyAsync;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -56,6 +60,19 @@ class CountedAspectTest {
                 .tag("method", "succeedWithMetrics")
                 .tag("class", "io.micrometer.core.aop.CountedAspectTest$CountedService")
                 .tag("extra", "tag")
+                .tag("result", "success").counter();
+
+        assertThat(counter.count()).isOne();
+        assertThat(counter.getId().getDescription()).isNull();
+    }
+
+    @Test
+    void pointCountedWithSuccessfulMetrics() {
+        CountedService countedService = getAdvisedService(new CountedService(), jp -> Arrays.asList(Tag.of("extra", "extraTag")));
+        countedService.succeedWithMetrics();
+
+        Counter counter = meterRegistry.get("metric.success")
+                .tag("extra", "extraTag")
                 .tag("result", "success").counter();
 
         assertThat(counter.count()).isOne();
@@ -122,6 +139,29 @@ class CountedAspectTest {
                 .tag("method", "succeedWithMetrics")
                 .tag("class", "io.micrometer.core.aop.CountedAspectTest$AsyncCountedService")
                 .tag("extra", "tag")
+                .tag("exception", "none")
+                .tag("result", "success").counter();
+
+        assertThat(counterAfterCompletion.count()).isOne();
+        assertThat(counterAfterCompletion.getId().getDescription()).isNull();
+    }
+
+    @Test
+    void pointCountedWithSuccessfulMetricsWhenCompleted() {
+        AsyncCountedService asyncCountedService = getAdvisedService(new AsyncCountedService(), jp -> Arrays.asList(Tag.of("extra", "extraTag")));
+        GuardedResult guardedResult = new GuardedResult();
+        CompletableFuture<?> completableFuture = asyncCountedService.succeedWithMetrics(guardedResult);
+
+        assertThat(meterRegistry.find("metric.success")
+                .tag("extra", "extraTag")
+                .tag("exception", "none")
+                .tag("result", "success").counter()).isNull();
+
+        guardedResult.complete();
+        completableFuture.join();
+
+        Counter counterAfterCompletion = meterRegistry.get("metric.success")
+                .tag("extra", "extraTag")
                 .tag("exception", "none")
                 .tag("result", "success").counter();
 
@@ -206,6 +246,12 @@ class CountedAspectTest {
     private <T> T getAdvisedService(T countedService) {
         AspectJProxyFactory proxyFactory = new AspectJProxyFactory(countedService);
         proxyFactory.addAspect(new CountedAspect(meterRegistry));
+        return proxyFactory.getProxy();
+    }
+
+    private <T> T getAdvisedService(T countedService, Function<ProceedingJoinPoint, Iterable<Tag>> joinPoint) {
+        AspectJProxyFactory proxyFactory = new AspectJProxyFactory(countedService);
+        proxyFactory.addAspect(new CountedAspect(meterRegistry, joinPoint));
         return proxyFactory.getProxy();
     }
 

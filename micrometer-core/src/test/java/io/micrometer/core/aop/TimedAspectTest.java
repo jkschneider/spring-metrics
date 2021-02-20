@@ -19,6 +19,7 @@ import io.micrometer.core.annotation.Timed;
 import io.micrometer.core.instrument.LongTaskTimer;
 import io.micrometer.core.instrument.Meter.Id;
 import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Tag;
 import io.micrometer.core.instrument.Timer;
 import io.micrometer.core.instrument.distribution.DistributionStatisticConfig;
 import io.micrometer.core.instrument.distribution.pause.PauseDetector;
@@ -29,6 +30,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.aop.aspectj.annotation.AspectJProxyFactory;
 
 import javax.annotation.Nonnull;
+import java.util.Arrays;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 
@@ -55,6 +57,22 @@ class TimedAspectTest {
     }
 
     @Test
+    void timeMethodWithJoinPoint() {
+        MeterRegistry registry = new SimpleMeterRegistry();
+
+        AspectJProxyFactory pf = new AspectJProxyFactory(new TimedService());
+        pf.addAspect(new TimedAspect(registry, jp -> Arrays.asList(Tag.of("extra", "extraTag"))));
+
+        TimedService service = pf.getProxy();
+
+        service.call();
+
+        assertThat(registry.get("call")
+                .tag("extra", "extraTag")
+                .timer().count()).isEqualTo(1);
+    }
+
+    @Test
     void timeMethodWithLongTaskTimer() {
         MeterRegistry registry = new SimpleMeterRegistry();
 
@@ -71,18 +89,18 @@ class TimedAspectTest {
                 .tag("extra", "tag")
                 .longTaskTimers().size()).isEqualTo(1);
     }
-    
+
     @Test
     void timeMethodFailure() {
         MeterRegistry failingRegistry = new FailingMeterRegistry();
-        
+
         AspectJProxyFactory pf = new AspectJProxyFactory(new TimedService());
         pf.addAspect(new TimedAspect(failingRegistry));
-        
+
         TimedService service = pf.getProxy();
-        
+
         service.call();
-        
+
         assertThatExceptionOfType(MeterNotFoundException.class).isThrownBy(() -> {
             failingRegistry.get("call")
                     .tag("class", "io.micrometer.core.aop.TimedAspectTest$TimedService")
