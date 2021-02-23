@@ -16,6 +16,8 @@
 package io.micrometer.core.instrument.binder.db;
 
 import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Tags;
+import io.micrometer.core.instrument.search.RequiredSearch;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 
@@ -24,41 +26,45 @@ import javax.sql.DataSource;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
+import static io.micrometer.core.instrument.binder.db.PostgreSQLDatabaseMetrics.Names.*;
+
 /**
  * @author Kristof Depypere
+ * @author Markus Dobel
  */
 class PostgreSQLDatabaseMetricsTest {
     private static final String DATABASE_NAME = "test";
     private static final String FUNCTIONAL_COUNTER_KEY = "key";
-    private DataSource dataSource = mock(DataSource.class);
-    private MeterRegistry registry = new SimpleMeterRegistry();
+    private final DataSource dataSource = mock(DataSource.class);
+    private final MeterRegistry registry = new SimpleMeterRegistry();
+    private final Tags tags = Tags.of("database", DATABASE_NAME);
 
     @Test
     void shouldRegisterPostgreSqlMetrics() {
         PostgreSQLDatabaseMetrics metrics = new PostgreSQLDatabaseMetrics(dataSource, DATABASE_NAME);
         metrics.bindTo(registry);
 
-        registry.get("postgres.size").tag("database", DATABASE_NAME).gauge();
-        registry.get("postgres.connections").tag("database", DATABASE_NAME).gauge();
-        registry.get("postgres.rows.fetched").tag("database", DATABASE_NAME).functionCounter();
-        registry.get("postgres.rows.inserted").tag("database", DATABASE_NAME).functionCounter();
-        registry.get("postgres.rows.updated").tag("database", DATABASE_NAME).functionCounter();
-        registry.get("postgres.rows.deleted").tag("database", DATABASE_NAME).functionCounter();
-        registry.get("postgres.rows.dead").tag("database", DATABASE_NAME).gauge();
+        get(SIZE).gauge();
+        get(CONNECTIONS).gauge();
+        get(ROWS_FETCHED).functionCounter();
+        get(ROWS_INSERTED).functionCounter();
+        get(ROWS_UPDATED).functionCounter();
+        get(ROWS_DELETED).functionCounter();
+        get(ROWS_DEAD).gauge();
 
-        registry.get("postgres.blocks.hits").tag("database", DATABASE_NAME).functionCounter();
-        registry.get("postgres.blocks.reads").tag("database", DATABASE_NAME).functionCounter();
+        get(BLOCKS_HITS).functionCounter();
+        get(BLOCKS_READS).functionCounter();
 
-        registry.get("postgres.temp.writes").tag("database", DATABASE_NAME).functionCounter();
-        registry.get("postgres.locks").tag("database", DATABASE_NAME).gauge();
+        get(TEMP_WRITES).functionCounter();
+        get(LOCKS).gauge();
 
-        registry.get("postgres.transactions").tag("database", DATABASE_NAME).functionCounter();
-        registry.get("postgres.checkpoints.timed").tag("database", DATABASE_NAME).functionCounter();
-        registry.get("postgres.checkpoints.requested").tag("database", DATABASE_NAME).functionCounter();
+        get(TRANSACTIONS).functionCounter();
+        get(CHECKPOINTS_TIMED).functionCounter();
+        get(CHECKPOINTS_REQUESTED).functionCounter();
 
-        registry.get("postgres.buffers.checkpoint").tag("database", DATABASE_NAME).functionCounter();
-        registry.get("postgres.buffers.clean").tag("database", DATABASE_NAME).functionCounter();
-        registry.get("postgres.buffers.backend").tag("database", DATABASE_NAME).functionCounter();
+        get(BUFFERS_CHECKPOINT).functionCounter();
+        get(BUFFERS_CLEAN).functionCounter();
+        get(BUFFERS_BACKEND).functionCounter();
     }
 
     @Test
@@ -91,5 +97,9 @@ class PostgreSQLDatabaseMetricsTest {
         Double result = metrics.resettableFunctionalCounter(FUNCTIONAL_COUNTER_KEY, () -> 1);
 
         assertThat(result).isEqualTo(14);
+    }
+
+    private RequiredSearch get(final String name) {
+        return registry.get(name).tags(tags);
     }
 }

@@ -36,6 +36,7 @@ import java.util.function.DoubleSupplier;
  * @author Kristof Depypere
  * @author Jon Schneider
  * @author Johnny Lim
+ * @author Markus Dobel
  * @since 1.1.0
  */
 @NonNullApi
@@ -95,38 +96,38 @@ public class PostgreSQLDatabaseMetrics implements MeterBinder {
 
     @Override
     public void bindTo(MeterRegistry registry) {
-        Gauge.builder("postgres.size", postgresDataSource, dataSource -> getDatabaseSize())
+        Gauge.builder(Names.SIZE, postgresDataSource, dataSource -> getDatabaseSize())
                 .tags(tags)
                 .description("The database size")
                 .register(registry);
-        Gauge.builder("postgres.connections", postgresDataSource, dataSource -> getConnectionCount())
+        Gauge.builder(Names.CONNECTIONS, postgresDataSource, dataSource -> getConnectionCount())
                 .tags(tags)
                 .description("Number of active connections to the given db")
                 .register(registry);
 
         // Hit ratio can be derived from dividing hits/reads
-        FunctionCounter.builder("postgres.blocks.hits", postgresDataSource,
-                dataSource -> resettableFunctionalCounter("postgres.blocks.hits", this::getBlockHits))
+        FunctionCounter.builder(Names.BLOCKS_HITS, postgresDataSource,
+                dataSource -> resettableFunctionalCounter(Names.BLOCKS_HITS, this::getBlockHits))
                 .tags(tags)
                 .description("Number of times disk blocks were found already in the buffer cache, so that a read was not necessary")
                 .register(registry);
-        FunctionCounter.builder("postgres.blocks.reads", postgresDataSource,
-                dataSource -> resettableFunctionalCounter("postgres.blocks.reads", this::getBlockReads))
+        FunctionCounter.builder(Names.BLOCKS_READS, postgresDataSource,
+                dataSource -> resettableFunctionalCounter(Names.BLOCKS_READS, this::getBlockReads))
                 .tags(tags)
                 .description("Number of disk blocks read in this database")
                 .register(registry);
 
-        FunctionCounter.builder("postgres.transactions", postgresDataSource,
-                dataSource -> resettableFunctionalCounter("postgres.transactions", this::getTransactionCount))
+        FunctionCounter.builder(Names.TRANSACTIONS, postgresDataSource,
+                dataSource -> resettableFunctionalCounter(Names.TRANSACTIONS, this::getTransactionCount))
                 .tags(tags)
                 .description("Total number of transactions executed (commits + rollbacks)")
                 .register(registry);
-        Gauge.builder("postgres.locks", postgresDataSource, dataSource -> getLockCount())
+        Gauge.builder(Names.LOCKS, postgresDataSource, dataSource -> getLockCount())
                 .tags(tags)
                 .description("Number of locks on the given db")
                 .register(registry);
-        FunctionCounter.builder("postgres.temp.writes", postgresDataSource,
-                dataSource -> resettableFunctionalCounter("postgres.temp.writes", this::getTempBytes))
+        FunctionCounter.builder(Names.TEMP_WRITES, postgresDataSource,
+                dataSource -> resettableFunctionalCounter(Names.TEMP_WRITES, this::getTempBytes))
                 .tags(tags)
                 .description("The total amount of temporary writes to disk to execute queries")
                 .baseUnit(BaseUnits.BYTES)
@@ -137,56 +138,56 @@ public class PostgreSQLDatabaseMetrics implements MeterBinder {
     }
 
     private void registerRowCountMetrics(MeterRegistry registry) {
-        FunctionCounter.builder("postgres.rows.fetched", postgresDataSource,
-                dataSource -> resettableFunctionalCounter("postgres.rows.fetched", this::getReadCount))
+        FunctionCounter.builder(Names.ROWS_FETCHED, postgresDataSource,
+                dataSource -> resettableFunctionalCounter(Names.ROWS_FETCHED, this::getReadCount))
                 .tags(tags)
                 .description("Number of rows fetched from the db")
                 .register(registry);
-        FunctionCounter.builder("postgres.rows.inserted", postgresDataSource,
-                dataSource -> resettableFunctionalCounter("postgres.rows.inserted", this::getInsertCount))
+        FunctionCounter.builder(Names.ROWS_INSERTED, postgresDataSource,
+                dataSource -> resettableFunctionalCounter(Names.ROWS_INSERTED, this::getInsertCount))
                 .tags(tags)
                 .description("Number of rows inserted from the db")
                 .register(registry);
-        FunctionCounter.builder("postgres.rows.updated", postgresDataSource,
-                dataSource -> resettableFunctionalCounter("postgres.rows.updated", this::getUpdateCount))
+        FunctionCounter.builder(Names.ROWS_UPDATED, postgresDataSource,
+                dataSource -> resettableFunctionalCounter(Names.ROWS_UPDATED, this::getUpdateCount))
                 .tags(tags)
                 .description("Number of rows updated from the db")
                 .register(registry);
-        FunctionCounter.builder("postgres.rows.deleted", postgresDataSource,
-                dataSource -> resettableFunctionalCounter("postgres.rows.deleted", this::getDeleteCount))
+        FunctionCounter.builder(Names.ROWS_DELETED, postgresDataSource,
+                dataSource -> resettableFunctionalCounter(Names.ROWS_DELETED, this::getDeleteCount))
                 .tags(tags)
                 .description("Number of rows deleted from the db")
                 .register(registry);
-        Gauge.builder("postgres.rows.dead", postgresDataSource, dataSource -> getDeadTupleCount())
+        Gauge.builder(Names.ROWS_DEAD, postgresDataSource, dataSource -> getDeadTupleCount())
                 .tags(tags)
                 .description("Total number of dead rows in the current database")
                 .register(registry);
     }
 
     private void registerCheckpointMetrics(MeterRegistry registry) {
-        FunctionCounter.builder("postgres.checkpoints.timed", postgresDataSource,
-                dataSource -> resettableFunctionalCounter("postgres.checkpoints.timed", this::getTimedCheckpointsCount))
+        FunctionCounter.builder(Names.CHECKPOINTS_TIMED, postgresDataSource,
+                dataSource -> resettableFunctionalCounter(Names.CHECKPOINTS_TIMED, this::getTimedCheckpointsCount))
                 .tags(tags)
                 .description("Number of checkpoints timed")
                 .register(registry);
-        FunctionCounter.builder("postgres.checkpoints.requested", postgresDataSource,
-                dataSource -> resettableFunctionalCounter("postgres.checkpoints.requested", this::getRequestedCheckpointsCount))
+        FunctionCounter.builder(Names.CHECKPOINTS_REQUESTED, postgresDataSource,
+                dataSource -> resettableFunctionalCounter(Names.CHECKPOINTS_REQUESTED, this::getRequestedCheckpointsCount))
                 .tags(tags)
                 .description("Number of checkpoints requested")
                 .register(registry);
 
-        FunctionCounter.builder("postgres.buffers.checkpoint", postgresDataSource,
-                dataSource -> resettableFunctionalCounter("postgres.buffers.checkpoint", this::getBuffersCheckpoint))
+        FunctionCounter.builder(Names.BUFFERS_CHECKPOINT, postgresDataSource,
+                dataSource -> resettableFunctionalCounter(Names.BUFFERS_CHECKPOINT, this::getBuffersCheckpoint))
                 .tags(tags)
                 .description("Number of buffers written during checkpoints")
                 .register(registry);
-        FunctionCounter.builder("postgres.buffers.clean", postgresDataSource,
-                dataSource -> resettableFunctionalCounter("postgres.buffers.clean", this::getBuffersClean))
+        FunctionCounter.builder(Names.BUFFERS_CLEAN, postgresDataSource,
+                dataSource -> resettableFunctionalCounter(Names.BUFFERS_CLEAN, this::getBuffersClean))
                 .tags(tags)
                 .description("Number of buffers written by the background writer")
                 .register(registry);
-        FunctionCounter.builder("postgres.buffers.backend", postgresDataSource,
-                dataSource -> resettableFunctionalCounter("postgres.buffers.backend", this::getBuffersBackend))
+        FunctionCounter.builder(Names.BUFFERS_BACKEND, postgresDataSource,
+                dataSource -> resettableFunctionalCounter(Names.BUFFERS_BACKEND, this::getBuffersBackend))
                 .tags(tags)
                 .description("Number of buffers written directly by a backend")
                 .register(registry);
@@ -299,5 +300,35 @@ public class PostgreSQLDatabaseMetrics implements MeterBinder {
 
     private static String getBgWriterQuery(String statName) {
         return SELECT + statName + " FROM pg_stat_bgwriter";
+    }
+
+    static final class Names {
+        public static final String SIZE = of("size");
+        public static final String CONNECTIONS = of("connections");
+        public static final String BLOCKS_HITS = of("blocks.hits");
+        public static final String BLOCKS_READS = of("blocks.reads");
+        public static final String TRANSACTIONS = of("transactions");
+        public static final String LOCKS = of("locks");
+        public static final String TEMP_WRITES = of("temp.writes");
+
+        public static final String ROWS_FETCHED = of("rows.fetched");
+        public static final String ROWS_INSERTED = of("rows.inserted");
+        public static final String ROWS_UPDATED = of("rows.updated");
+        public static final String ROWS_DELETED = of("rows.deleted");
+        public static final String ROWS_DEAD = of("rows.dead");
+
+        public static final String CHECKPOINTS_TIMED = of("checkpoints.timed");
+        public static final String CHECKPOINTS_REQUESTED = of("checkpoints.requested");
+
+        public static final String BUFFERS_CHECKPOINT = of("buffers.checkpoint");
+        public static final String BUFFERS_CLEAN = of("buffers.clean");
+        public static final String BUFFERS_BACKEND = of("buffers.backend");
+
+        private static String of(String name) {
+            return "postgres." + name;
+        }
+
+        private Names() {
+        }
     }
 }
