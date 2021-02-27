@@ -7,6 +7,12 @@ executors:
       GRADLE_OPTS: '-Dorg.gradle.jvmargs="-Xmx2048m -XX:+HeapDumpOnOutOfMemoryError"'
     docker:
       - image: cimg/openjdk:15.0
+  circle-jdk8-executor:
+    working_directory: ~/micrometer
+    environment:
+      GRADLE_OPTS: '-Dorg.gradle.jvmargs="-Xmx2048m -XX:+HeapDumpOnOutOfMemoryError"'
+    docker:
+      - image: cimg/openjdk:8.0.275
   machine-executor:
     working_directory: ~/micrometer
     machine:
@@ -52,6 +58,11 @@ jobs:
       - run: ./gradlew shenandoahTest
       - run: ./gradlew zgcTest
 
+  build-jdk8:
+    executor: circle-jdk8-executor
+    steps:
+      - gradlew-build
+
   docker-tests:
     executor: machine-executor
     steps:
@@ -87,10 +98,12 @@ workflows:
   build_prs_deploy_snapshots:
     jobs:
       - build
+      - build-jdk8
       - docker-tests
       - deploy:
           requires:
             - build
+            - build-jdk8
             - docker-tests
           filters:
             branches:
@@ -105,6 +118,12 @@ workflows:
               ignore: /.*/
             tags:
               only: /^v\d+\.\d+\.\d+(-rc\.\d+)?$/
+      - build-jdk8:
+          filters:
+            branches:
+              ignore: /.*/
+            tags:
+              only: /^v\d+\.\d+\.\d+(-rc\.\d+)?$/
       - docker-tests:
           filters:
             branches:
@@ -114,6 +133,7 @@ workflows:
       - deploy:
           requires:
             - build
+            - build-jdk8
             - docker-tests
           filters:
             tags:
