@@ -48,6 +48,8 @@ dependencies {
 
     optionalApi 'org.mongodb:mongo-java-driver'
 
+    optionalApi 'org.neo4j.driver:neo4j-java-driver'
+
     optionalApi 'org.jooq:jooq'
 
     optionalApi 'org.apache.kafka:kafka-clients'
@@ -97,4 +99,7 @@ dependencies {
     testImplementation 'org.testcontainers:testcontainers'
     testImplementation 'org.testcontainers:junit-jupiter'
     testImplementation 'org.testcontainers:kafka'
+
+    // Neo4j binder IT dependencies
+    testImplementation 'org.testcontainers:neo4j'
 }
