@@ -25,13 +25,13 @@ import java.util.function.DoubleSupplier;
 import java.util.function.LongSupplier;
 
 /**
- * An implementation of a decaying maximum for a distribution based on a configurable ring buffer.
+ * An implementation of a decaying minimum for a distribution based on a configurable ring buffer.
  *
  * @author Jon Schneider
  */
-public class TimeWindowMax {
-    private static final AtomicIntegerFieldUpdater<TimeWindowMax> rotatingUpdater =
-            AtomicIntegerFieldUpdater.newUpdater(TimeWindowMax.class, "rotating");
+public class TimeWindowMin {
+    private static final AtomicIntegerFieldUpdater<TimeWindowMin> rotatingUpdater =
+            AtomicIntegerFieldUpdater.newUpdater(TimeWindowMin.class, "rotating");
 
     private final Clock clock;
     private final long durationBetweenRotatesMillis;
@@ -43,11 +43,11 @@ public class TimeWindowMax {
     private volatile int rotating; // 0 - not rotating, 1 - rotating
 
     @SuppressWarnings("ConstantConditions")
-    public TimeWindowMax(Clock clock, DistributionStatisticConfig config) {
+    public TimeWindowMin(Clock clock, DistributionStatisticConfig config) {
         this(clock, config.getExpiry().toMillis(), config.getBufferLength());
     }
 
-    public TimeWindowMax(Clock clock, long rotateFrequencyMillis, int bufferLength) {
+    public TimeWindowMin(Clock clock, long rotateFrequencyMillis, int bufferLength) {
         this.clock = clock;
         this.durationBetweenRotatesMillis = rotateFrequencyMillis;
         this.lastRotateTimestampMillis = clock.wallTime();
@@ -55,7 +55,7 @@ public class TimeWindowMax {
 
         this.ringBuffer = new AtomicLong[bufferLength];
         for (int i = 0; i < bufferLength; i++) {
-            this.ringBuffer[i] = new AtomicLong();
+            this.ringBuffer[i] = new AtomicLong(Long.MAX_VALUE);
         }
     }
 
@@ -72,8 +72,8 @@ public class TimeWindowMax {
     private void record(LongSupplier sampleSupplier) {
         rotate();
         long sample = sampleSupplier.getAsLong();
-        for (AtomicLong max : ringBuffer) {
-            updateMax(max, sample);
+        for (AtomicLong min : ringBuffer) {
+            updateMin(min, sample);
         }
     }
 
@@ -108,11 +108,11 @@ public class TimeWindowMax {
         record(() -> Double.doubleToLongBits(sample));
     }
 
-    private void updateMax(AtomicLong max, long sample) {
-        long curMax;
+    private void updateMin(AtomicLong min, long sample) {
+        long curMin;
         do {
-            curMax = max.get();
-        } while (curMax < sample && !max.compareAndSet(curMax, sample));
+            curMin = min.get();
+        } while (curMin > sample && !min.compareAndSet(curMin, sample));
     }
 
     private void rotate() {
@@ -131,7 +131,7 @@ public class TimeWindowMax {
             int iterations = 0;
             synchronized (this) {
                 do {
-                    ringBuffer[currentBucket].set(0);
+                    ringBuffer[currentBucket].set(Long.MAX_VALUE);
                     if (++currentBucket >= ringBuffer.length) {
                         currentBucket = 0;
                     }

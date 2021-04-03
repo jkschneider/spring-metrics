@@ -15,21 +15,23 @@
  */
 package io.micrometer.cloudwatch2;
 
+import io.micrometer.core.instrument.Tag;
 import io.micrometer.core.instrument.Timer;
 import io.micrometer.core.instrument.*;
+import io.micrometer.core.instrument.distribution.DistributionStatisticConfig;
+import io.micrometer.core.instrument.distribution.HistogramGauges;
+import io.micrometer.core.instrument.distribution.pause.PauseDetector;
 import io.micrometer.core.instrument.step.StepMeterRegistry;
 import io.micrometer.core.instrument.util.NamedThreadFactory;
 import io.micrometer.core.instrument.util.StringUtils;
+import io.micrometer.core.lang.NonNull;
 import io.micrometer.core.lang.Nullable;
 import io.micrometer.core.util.internal.logging.WarnThenDebugLogger;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.core.exception.AbortedException;
 import software.amazon.awssdk.services.cloudwatch.CloudWatchAsyncClient;
-import software.amazon.awssdk.services.cloudwatch.model.Dimension;
-import software.amazon.awssdk.services.cloudwatch.model.MetricDatum;
-import software.amazon.awssdk.services.cloudwatch.model.PutMetricDataRequest;
-import software.amazon.awssdk.services.cloudwatch.model.StandardUnit;
+import software.amazon.awssdk.services.cloudwatch.model.*;
 
 import java.time.Instant;
 import java.util.*;
@@ -79,7 +81,11 @@ public class CloudWatchMeterRegistry extends StepMeterRegistry {
         super(config, clock);
         this.cloudWatchAsyncClient = cloudWatchAsyncClient;
         this.config = config;
-        
+
+        if (config.useStatisticsSet()) {
+            logger.info("publishing Timer and DistributionSummary as StatisticsSet");
+        }
+
         config().namingConvention(new CloudWatchNamingConvention());
         start(threadFactory);
     }
@@ -95,12 +101,33 @@ public class CloudWatchMeterRegistry extends StepMeterRegistry {
                     interrupted = true;
                 }
             }
-        }
-        finally {
+        } finally {
             if (interrupted) {
                 Thread.currentThread().interrupt();
             }
         }
+    }
+
+    @Override
+    protected Timer newTimer(Meter.Id id, DistributionStatisticConfig distributionStatisticConfig, PauseDetector pauseDetector) {
+        if (config.useStatisticsSet()) {
+            Timer timer = new CloudWatchTimer(id, clock, distributionStatisticConfig, pauseDetector, getBaseTimeUnit(),
+                    this.config.step().toMillis(), false);
+            HistogramGauges.registerWithCommonFormat(timer, this);
+            return timer;
+        }
+        return super.newTimer(id, distributionStatisticConfig, pauseDetector);
+    }
+
+    @Override
+    protected DistributionSummary newDistributionSummary(Meter.Id id, DistributionStatisticConfig distributionStatisticConfig, double scale) {
+        if (config.useStatisticsSet()) {
+            DistributionSummary summary = new CloudWatchDistributionSummary(id, clock, distributionStatisticConfig, scale,
+                    config.step().toMillis(), false);
+            HistogramGauges.registerWithCommonFormat(summary, this);
+            return summary;
+        }
+        return super.newDistributionSummary(id, distributionStatisticConfig, scale);
     }
 
     // VisibleForTesting
@@ -167,25 +194,54 @@ public class CloudWatchMeterRegistry extends StepMeterRegistry {
         // VisibleForTesting
         Stream<MetricDatum> timerData(Timer timer) {
             Stream.Builder<MetricDatum> metrics = Stream.builder();
-            metrics.add(metricDatum(timer.getId(), "sum", getBaseTimeUnit().name(), timer.totalTime(getBaseTimeUnit())));
             long count = timer.count();
-            metrics.add(metricDatum(timer.getId(), "count", StandardUnit.COUNT, count));
-            if (count > 0) {
-                metrics.add(metricDatum(timer.getId(), "avg", getBaseTimeUnit().name(), timer.mean(getBaseTimeUnit())));
-                metrics.add(metricDatum(timer.getId(), "max", getBaseTimeUnit().name(), timer.max(getBaseTimeUnit())));
+
+
+            if (config.useStatisticsSet()) {
+                if (count > 0) {
+                    final StatisticSet statisticSet = StatisticSet.builder()
+                            .minimum(((CloudWatchTimer) timer).min(getBaseTimeUnit()))
+                            .maximum(timer.max(getBaseTimeUnit()))
+                            .sum(timer.totalTime(getBaseTimeUnit()))
+                            .sampleCount((double) timer.count())
+                            .build();
+
+                    metrics.add(metricDatum(timer.getId(), toStandardUnit(getBaseTimeUnit().name()), statisticSet));
+                }
+            } else {
+                metrics.add(metricDatum(timer.getId(), "sum", getBaseTimeUnit().name(), timer.totalTime(getBaseTimeUnit())));
+                metrics.add(metricDatum(timer.getId(), "count", StandardUnit.COUNT, count));
+                if (count > 0) {
+                    metrics.add(metricDatum(timer.getId(), "avg", getBaseTimeUnit().name(), timer.mean(getBaseTimeUnit())));
+                    metrics.add(metricDatum(timer.getId(), "max", getBaseTimeUnit().name(), timer.max(getBaseTimeUnit())));
+                }
             }
             return metrics.build();
         }
 
         // VisibleForTesting
+
         Stream<MetricDatum> summaryData(DistributionSummary summary) {
             Stream.Builder<MetricDatum> metrics = Stream.builder();
-            metrics.add(metricDatum(summary.getId(), "sum", summary.totalAmount()));
             long count = summary.count();
-            metrics.add(metricDatum(summary.getId(), "count", StandardUnit.COUNT, count));
-            if (count > 0) {
-                metrics.add(metricDatum(summary.getId(), "avg", summary.mean()));
-                metrics.add(metricDatum(summary.getId(), "max", summary.max()));
+
+            if (config.useStatisticsSet()) {
+                if (count > 0) {
+                    final StatisticSet statisticSet = StatisticSet.builder()
+                            .minimum(((CloudWatchDistributionSummary) summary).min())
+                            .maximum(summary.max())
+                            .sum(summary.totalAmount())
+                            .sampleCount((double) summary.count())
+                            .build();
+                    metrics.add(metricDatum(summary.getId(), StandardUnit.COUNT, statisticSet));
+                }
+            } else {
+                metrics.add(metricDatum(summary.getId(), "sum", summary.totalAmount()));
+                metrics.add(metricDatum(summary.getId(), "count", StandardUnit.COUNT, count));
+                if (count > 0) {
+                    metrics.add(metricDatum(summary.getId(), "avg", summary.mean()));
+                    metrics.add(metricDatum(summary.getId(), "max", summary.max()));
+                }
             }
             return metrics.build();
         }
@@ -205,6 +261,7 @@ public class CloudWatchMeterRegistry extends StepMeterRegistry {
         }
 
         // VisibleForTesting
+
         Stream<MetricDatum> functionCounterData(FunctionCounter counter) {
             MetricDatum metricDatum = metricDatum(counter.getId(), "count", StandardUnit.COUNT, counter.count());
             if (metricDatum == null) {
@@ -212,8 +269,8 @@ public class CloudWatchMeterRegistry extends StepMeterRegistry {
             }
             return Stream.of(metricDatum);
         }
-
         // VisibleForTesting
+
         Stream<MetricDatum> functionTimerData(FunctionTimer timer) {
             // we can't know anything about max and percentiles originating from a function timer
             double sum = timer.totalTime(getBaseTimeUnit());
@@ -229,8 +286,8 @@ public class CloudWatchMeterRegistry extends StepMeterRegistry {
             }
             return metrics.build();
         }
-
         // VisibleForTesting
+
         Stream<MetricDatum> metricData(Meter m) {
             return stream(m.measure().spliterator(), false)
                     .map(ms -> metricDatum(m.getId().withTag(ms.getStatistic()), ms.getValue()))
@@ -252,21 +309,32 @@ public class CloudWatchMeterRegistry extends StepMeterRegistry {
             return metricDatum(id, suffix, toStandardUnit(unit), value);
         }
 
+        private MetricDatum metricDatum(Meter.Id id, @Nullable StandardUnit standardUnit, StatisticSet statisticSet) {
+            return metricDatumBuilder(id, null, standardUnit == null ? StandardUnit.NONE : standardUnit)
+                    .statisticValues(statisticSet)
+                    .build();
+        }
+
         @Nullable
         private MetricDatum metricDatum(Meter.Id id, @Nullable String suffix, StandardUnit standardUnit, double value) {
             if (Double.isNaN(value)) {
                 return null;
             }
 
+            return metricDatumBuilder(id, suffix, standardUnit)
+                    .value(CloudWatchUtils.clampMetricValue(value))
+                    .build();
+        }
+
+        @NonNull
+        private MetricDatum.Builder metricDatumBuilder(Meter.Id id, @Nullable String suffix, StandardUnit standardUnit) {
             List<Tag> tags = id.getConventionTags(config().namingConvention());
             return MetricDatum.builder()
                     .storageResolution(config.highResolution() ? 1 : 60)
                     .metricName(getMetricName(id, suffix))
                     .dimensions(toDimensions(tags))
                     .timestamp(timestamp)
-                    .value(CloudWatchUtils.clampMetricValue(value))
-                    .unit(standardUnit)
-                    .build();
+                    .unit(standardUnit);
         }
 
         // VisibleForTesting
