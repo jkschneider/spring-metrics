@@ -145,20 +145,17 @@ public class CountedAspect {
     }
 
     private void record(ProceedingJoinPoint pjp, Counted counted, String exception, String result) {
-        counter(pjp, counted)
-                .tag(EXCEPTION_TAG, exception)
-                .tag(RESULT_TAG, result)
-                .tags(counted.extraTags())
-                .register(meterRegistry)
-                .increment();
-    }
-
-    private Counter.Builder counter(ProceedingJoinPoint pjp, Counted counted) {
-        Counter.Builder builder = Counter.builder(counted.value()).tags(tagsBasedOnJoinPoint.apply(pjp));
-        String description = counted.description();
-        if (!description.isEmpty()) {
-            builder.description(description);
+        try {
+            Counter.builder(counted.value())
+                    .description(counted.description().isEmpty() ? null : counted.description())
+                    .tags(counted.extraTags())
+                    .tag(EXCEPTION_TAG, exception)
+                    .tag(RESULT_TAG, result)
+                    .tags(tagsBasedOnJoinPoint.apply(pjp))
+                    .register(meterRegistry)
+                    .increment();
+        } catch (Exception e) {
+            // ignoring on purpose
         }
-        return builder;
     }
 }
