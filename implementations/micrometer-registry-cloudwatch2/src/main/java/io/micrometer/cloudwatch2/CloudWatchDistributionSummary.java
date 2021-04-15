@@ -1,5 +1,5 @@
 /**
- * Copyright 2017 VMware, Inc.
+ * Copyright 2021 VMware, Inc.
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,11 +36,6 @@ public class CloudWatchDistributionSummary extends StepDistributionSummary {
     public CloudWatchDistributionSummary(Id id, Clock clock, DistributionStatisticConfig distributionStatisticConfig, double scale, long stepMillis, boolean supportsAggregablePercentiles) {
         super(id, clock, distributionStatisticConfig, scale, stepMillis, supportsAggregablePercentiles);
         this.min = new TimeWindowMin(clock, distributionStatisticConfig);
-    }
-
-    @Override
-    protected void recordNonNegative(double amount) {
-        super.recordNonNegative(amount);
     }
 
     public double min() {

@@ -1,5 +1,5 @@
 /**
- * Copyright 2017 VMware, Inc.
+ * Copyright 2021 VMware, Inc.
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -83,7 +83,7 @@ public class CloudWatchMeterRegistry extends StepMeterRegistry {
         this.config = config;
 
         if (config.useStatisticsSet()) {
-            logger.info("publishing Timer and DistributionSummary as StatisticsSet");
+            logger.debug("publishing Timer and DistributionSummary as StatisticsSet");
         }
 
         config().namingConvention(new CloudWatchNamingConvention());
