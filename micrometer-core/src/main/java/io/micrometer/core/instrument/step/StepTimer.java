@@ -27,7 +27,7 @@ import java.util.concurrent.TimeUnit;
 /**
  * @author Jon Schneider
  */
-public class StepTimer extends AbstractTimer {
+public class StepTimer extends AbstractTimer implements PartialStepTimer {
     private final StepLong count;
     private final StepLong total;
     private final TimeWindowMax max;
@@ -100,8 +100,24 @@ public class StepTimer extends AbstractTimer {
     }
 
     @Override
+    public long partialCount() {
+        return (long)count.partialPoll();
+    }
+
+    @Override
     public double totalTime(TimeUnit unit) {
         return TimeUtils.nanosToUnit(total.poll(), unit);
+    }
+
+    @Override
+    public double partialTotalTime(TimeUnit unit) {
+        return TimeUtils.nanosToUnit(total.partialPoll(), unit);
+    }
+
+    @Override
+    public double partialMean(TimeUnit unit) {
+        long partialCount = partialCount();
+        return partialCount == 0 ? 0 : partialTotalTime(unit) / partialCount;
     }
 
     @Override

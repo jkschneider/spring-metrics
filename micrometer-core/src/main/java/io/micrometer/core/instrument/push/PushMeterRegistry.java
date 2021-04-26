@@ -40,12 +40,24 @@ public abstract class PushMeterRegistry extends MeterRegistry {
 
     protected abstract void publish();
 
+    protected void publishGracefulShutdown() {
+        publish();
+    }
+
     /**
      * Catch uncaught exceptions thrown from {@link #publish()}.
      */
-    private void publishSafely() {
+    protected void publishSafely() {
         try {
             publish();
+        } catch (Throwable e) {
+            logger.warn("Unexpected exception thrown while publishing metrics for " + this.getClass().getSimpleName(), e);
+        }
+    }
+
+    protected void publishGracefulShutdownSafety() {
+        try {
+            publishGracefulShutdown();
         } catch (Throwable e) {
             logger.warn("Unexpected exception thrown while publishing metrics for " + this.getClass().getSimpleName(), e);
         }
@@ -80,7 +92,7 @@ public abstract class PushMeterRegistry extends MeterRegistry {
     @Override
     public void close() {
         if (config.enabled()) {
-            publishSafely();
+            publishGracefulShutdownSafety();
         }
         stop();
         super.close();

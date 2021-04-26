@@ -24,7 +24,7 @@ import io.micrometer.core.instrument.distribution.TimeWindowMax;
 
 import java.util.Arrays;
 
-public class StepDistributionSummary extends AbstractDistributionSummary {
+public class StepDistributionSummary extends AbstractDistributionSummary implements PartialStepDistributionSummary {
     private final StepLong count;
     private final StepDouble total;
     private final TimeWindowMax max;
@@ -92,14 +92,32 @@ public class StepDistributionSummary extends AbstractDistributionSummary {
     }
 
     @Override
+    public long partialCount() {
+        return (long) count.partialPoll();
+    }
+
+    @Override
     public double totalAmount() {
         return total.poll();
+    }
+
+    @Override
+    public double partialTotalAmount() {
+        return total.partialPoll();
+    }
+
+    @Override
+    public double partialMean() {
+        long partialCount = partialCount();
+        return partialCount == 0 ? 0 : partialTotalAmount() / partialCount;
     }
 
     @Override
     public double max() {
         return max.poll();
     }
+
+
 
     @Override
     public Iterable<Measurement> measure() {

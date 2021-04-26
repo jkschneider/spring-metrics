@@ -16,6 +16,11 @@
 package io.micrometer.influx;
 
 import io.micrometer.core.instrument.*;
+import io.micrometer.core.instrument.step.PartialMeasurement;
+import io.micrometer.core.instrument.step.PartialStepCounter;
+import io.micrometer.core.instrument.step.PartialStepDistributionSummary;
+import io.micrometer.core.instrument.step.PartialStepFunctionTimer;
+import io.micrometer.core.instrument.step.PartialStepTimer;
 import io.micrometer.core.instrument.step.StepMeterRegistry;
 import io.micrometer.core.instrument.util.*;
 import io.micrometer.core.ipc.http.HttpSender;
@@ -109,6 +114,15 @@ public class InfluxMeterRegistry extends StepMeterRegistry {
 
     @Override
     protected void publish() {
+        internalPublish(false);
+    }
+
+    @Override
+    protected void publishGracefulShutdown() {
+        internalPublish(true);
+    }
+
+    protected void internalPublish(final boolean enablePartialStepRecording) {
         createDatabaseIfNecessary();
 
         try {
@@ -123,14 +137,14 @@ public class InfluxMeterRegistry extends StepMeterRegistry {
                         .withPlainText(batch.stream()
                                 .flatMap(m -> m.match(
                                         gauge -> writeGauge(gauge.getId(), gauge.value()),
-                                        counter -> writeCounter(counter.getId(), counter.count()),
-                                        this::writeTimer,
-                                        this::writeSummary,
+                                        counter -> writeCounter(counter, enablePartialStepRecording),
+                                        timer -> writeTimer(timer,enablePartialStepRecording),
+                                        summary -> writeSummary(summary,enablePartialStepRecording),
                                         this::writeLongTaskTimer,
                                         gauge -> writeGauge(gauge.getId(), gauge.value(getBaseTimeUnit())),
-                                        counter -> writeCounter(counter.getId(), counter.count()),
-                                        this::writeFunctionTimer,
-                                        this::writeMeter))
+                                        counter -> writeFunctionCounter(counter,enablePartialStepRecording),
+                                        functionTimer -> writeFunctionTimer(functionTimer,enablePartialStepRecording),
+                                        meter -> writeMeter(meter,enablePartialStepRecording)))
                                 .collect(joining("\n")))
                         .compressWhen(config::compressed)
                         .send()
@@ -147,11 +161,17 @@ public class InfluxMeterRegistry extends StepMeterRegistry {
         }
     }
 
+
     // VisibleForTesting
-    Stream<String> writeMeter(Meter m) {
+    Stream<String> writeMeter(Meter m,final boolean enablePartialStepRecording) {
         List<Field> fields = new ArrayList<>();
         for (Measurement measurement : m.measure()) {
-            double value = measurement.getValue();
+            double value;
+            if (enablePartialStepRecording && PartialMeasurement.class.isAssignableFrom(measurement.getClass())) {
+                value = ((PartialMeasurement) measurement).partialGetValue();
+            } else {
+                value = measurement.getValue();
+            }
             if (!Double.isFinite(value)) {
                 continue;
             }
@@ -182,6 +202,35 @@ public class InfluxMeterRegistry extends StepMeterRegistry {
         return Stream.empty();
     }
 
+    private Stream<String> writeFunctionCounter(FunctionCounter functionCounter, boolean enablePartialStepRecording) {
+        double count;
+        Meter.Id id = functionCounter.getId();
+        if (enablePartialStepRecording && PartialStepCounter.class.isAssignableFrom(functionCounter.getClass())) {
+            count = ((PartialStepCounter) functionCounter).partialCount();
+        } else {
+            count = functionCounter.count();
+        }
+        if (Double.isFinite(count)) {
+            return Stream.of(influxLineProtocol(id, "counter", Stream.of(new Field("value", count))));
+        }
+        return Stream.empty();
+    }
+
+    // VisibleForTesting
+    Stream<String> writeCounter(Counter counter,final boolean enablePartialStepRecording) {
+        double count;
+        Meter.Id id = counter.getId();
+        if (enablePartialStepRecording && PartialStepCounter.class.isAssignableFrom(counter.getClass())) {
+            count = ((PartialStepCounter) counter).partialCount();
+        } else {
+            count = counter.count();
+        }
+        if (Double.isFinite(count)) {
+            return Stream.of(influxLineProtocol(id, "counter", Stream.of(new Field("value", count))));
+        }
+        return Stream.empty();
+    }
+
     // VisibleForTesting
     Stream<String> writeGauge(Meter.Id id, Double value) {
         if (Double.isFinite(value)) {
@@ -191,13 +240,29 @@ public class InfluxMeterRegistry extends StepMeterRegistry {
     }
 
     // VisibleForTesting
-    Stream<String> writeFunctionTimer(FunctionTimer timer) {
-        double sum = timer.totalTime(getBaseTimeUnit());
+    Stream<String> writeFunctionTimer(FunctionTimer timer,final boolean enablePartialStepRecording) {
+        double sum;
+        boolean partialCondition = enablePartialStepRecording && PartialStepFunctionTimer.class.isAssignableFrom(timer.getClass());
+        if (partialCondition) {
+            sum = ((PartialStepFunctionTimer) timer).partialTotalTime(getBaseTimeUnit());
+        } else {
+            sum = timer.totalTime(getBaseTimeUnit());
+        }
+
         if (Double.isFinite(sum)) {
+            double mean;
+            double count;
+            if (partialCondition) {
+                mean = ((PartialStepFunctionTimer) timer).partialMean(getBaseTimeUnit());
+                count = ((PartialStepFunctionTimer) timer).partialCount();
+            } else {
+                mean = timer.mean(getBaseTimeUnit());
+                count = timer.count();
+            }
             Stream.Builder<Field> builder = Stream.builder();
             builder.add(new Field("sum", sum));
-            builder.add(new Field("count", timer.count()));
-            double mean = timer.mean(getBaseTimeUnit());
+            builder.add(new Field("count", count));
+
             if (Double.isFinite(mean)) {
                 builder.add(new Field("mean", mean));
             }
@@ -206,22 +271,48 @@ public class InfluxMeterRegistry extends StepMeterRegistry {
         return Stream.empty();
     }
 
-    private Stream<String> writeTimer(Timer timer) {
+    // VisibleForTesting
+    Stream<String> writeTimer(Timer timer,final boolean enablePartialStepRecording) {
+        double totalTime;
+        long count;
+        double mean;
+        if (enablePartialStepRecording && PartialStepTimer.class.isAssignableFrom(timer.getClass())) {
+            totalTime = ((PartialStepTimer) timer).partialTotalTime(getBaseTimeUnit());
+            count = ((PartialStepTimer) timer).partialCount();
+            mean = ((PartialStepTimer) timer).partialMean(getBaseTimeUnit());
+        } else {
+            totalTime = timer.totalTime(getBaseTimeUnit());
+            count = timer.count();
+            mean = timer.mean(getBaseTimeUnit());
+        }
         final Stream<Field> fields = Stream.of(
-                new Field("sum", timer.totalTime(getBaseTimeUnit())),
-                new Field("count", timer.count()),
-                new Field("mean", timer.mean(getBaseTimeUnit())),
+                new Field("sum", totalTime),
+                new Field("count", count),
+                new Field("mean", mean),
                 new Field("upper", timer.max(getBaseTimeUnit()))
         );
 
         return Stream.of(influxLineProtocol(timer.getId(), "histogram", fields));
     }
 
-    private Stream<String> writeSummary(DistributionSummary summary) {
+    // VisibleForTesting
+    Stream<String> writeSummary(DistributionSummary summary,final boolean enablePartialStepRecording) {
+        double totalAmount;
+        long count;
+        double mean;
+        if (enablePartialStepRecording && PartialStepDistributionSummary.class.isAssignableFrom(summary.getClass())) {
+            totalAmount = ((PartialStepDistributionSummary) summary).partialTotalAmount();
+            count = ((PartialStepDistributionSummary) summary).partialCount();
+            mean = ((PartialStepDistributionSummary) summary).partialMean();
+        } else {
+            totalAmount = summary.totalAmount();
+            count = summary.count();
+            mean = summary.mean();
+        }
         final Stream<Field> fields = Stream.of(
-                new Field("sum", summary.totalAmount()),
-                new Field("count", summary.count()),
-                new Field("mean", summary.mean()),
+                new Field("sum", totalAmount),
+                new Field("count", count),
+                new Field("mean", mean),
                 new Field("upper", summary.max())
         );
 

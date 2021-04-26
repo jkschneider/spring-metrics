@@ -22,7 +22,7 @@ import io.micrometer.core.instrument.FunctionCounter;
 import java.lang.ref.WeakReference;
 import java.util.function.ToDoubleFunction;
 
-public class StepFunctionCounter<T> extends AbstractMeter implements FunctionCounter {
+public class StepFunctionCounter<T> extends AbstractMeter implements FunctionCounter,PartialStepCounter {
     private final WeakReference<T> ref;
     private final ToDoubleFunction<T> f;
     private volatile double last;
@@ -37,12 +37,22 @@ public class StepFunctionCounter<T> extends AbstractMeter implements FunctionCou
 
     @Override
     public double count() {
+        internalCount();
+        return count.poll();
+    }
+
+    @Override
+    public double partialCount() {
+        internalCount();
+        return count.partialPoll();
+    }
+
+    private void internalCount() {
         T obj2 = ref.get();
         if (obj2 != null) {
             double prevLast = last;
             last = f.applyAsDouble(obj2);
             count.getCurrent().add(last - prevLast);
         }
-        return count.poll();
     }
 }

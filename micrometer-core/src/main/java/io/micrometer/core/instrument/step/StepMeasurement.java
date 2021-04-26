@@ -22,7 +22,7 @@ import io.micrometer.core.instrument.Statistic;
 import java.util.concurrent.atomic.DoubleAdder;
 import java.util.function.Supplier;
 
-class StepMeasurement extends Measurement {
+class StepMeasurement extends Measurement implements PartialMeasurement {
     private final StepDouble value;
     private final DoubleAdder lastCount = new DoubleAdder();
     private final Supplier<Double> f;
@@ -35,11 +35,20 @@ class StepMeasurement extends Measurement {
 
     @Override
     public double getValue() {
+        internalGetValue();
+        return value.poll();
+    }
+
+    @Override
+    public double partialGetValue() {
+        internalGetValue();
+        return value.partialPoll();
+    }
+
+    private void internalGetValue() {
         double absoluteCount = f.get();
         double inc = Math.max(0, absoluteCount - lastCount.sum());
         lastCount.add(inc);
         value.getCurrent().add(inc);
-
-        return value.poll();
     }
 }

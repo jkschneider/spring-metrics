@@ -30,7 +30,7 @@ import java.util.function.ToLongFunction;
  * @author Jon Schneider
  * @author Johnny Lim
  */
-public class StepFunctionTimer<T> implements FunctionTimer {
+public class StepFunctionTimer<T> implements FunctionTimer,PartialStepFunctionTimer {
     private final Id id;
     private final WeakReference<T> ref;
     private final ToLongFunction<T> countFunction;
@@ -60,26 +60,52 @@ public class StepFunctionTimer<T> implements FunctionTimer {
      * The total number of occurrences of the timed event.
      */
     public double count() {
+        internalCount();
+        return count.poll();
+    }
+
+    @Override
+    public double partialCount() {
+        internalCount();
+        return count.partialPoll();
+    }
+
+    private void internalCount() {
         T obj2 = ref.get();
         if (obj2 != null) {
             long prevLast = lastCount;
             lastCount = Math.max(countFunction.applyAsLong(obj2), 0);
             count.getCurrent().add(lastCount - prevLast);
         }
-        return count.poll();
     }
 
     /**
      * The total time of all occurrences of the timed event.
      */
     public double totalTime(TimeUnit unit) {
+        internalTotalTime();
+        return TimeUtils.convert(total.poll(), baseTimeUnit(), unit);
+    }
+
+    @Override
+    public double partialTotalTime(TimeUnit unit) {
+        internalTotalTime();
+        return TimeUtils.convert(total.partialPoll(), baseTimeUnit(), unit);
+    }
+
+    private void internalTotalTime() {
         T obj2 = ref.get();
         if (obj2 != null) {
             double prevLast = lastTime;
             lastTime = Math.max(TimeUtils.convert(totalTimeFunction.applyAsDouble(obj2), totalTimeFunctionUnit, baseTimeUnit()), 0);
             total.getCurrent().add(lastTime - prevLast);
         }
-        return TimeUtils.convert(total.poll(), baseTimeUnit(), unit);
+    }
+
+    @Override
+    public double partialMean(TimeUnit unit) {
+        double partialCount = partialCount();
+        return partialCount == 0 ? 0 : partialTotalTime(unit) / partialCount;
     }
 
     @Override

@@ -26,7 +26,7 @@ import io.micrometer.core.instrument.Counter;
  *
  * @author Jon Schneider
  */
-public class StepCounter extends AbstractMeter implements Counter {
+public class StepCounter extends AbstractMeter implements Counter,PartialStepCounter {
     private final StepDouble value;
 
     public StepCounter(Id id, Clock clock, long stepMillis) {
@@ -42,5 +42,10 @@ public class StepCounter extends AbstractMeter implements Counter {
     @Override
     public double count() {
         return value.poll();
+    }
+
+    @Override
+    public double partialCount() {
+        return value.partialPoll();
     }
 }

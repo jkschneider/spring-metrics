@@ -101,6 +101,51 @@ class InfluxMeterRegistryTest {
     }
 
     @Test
+    void writeCounterWithPartialStepActiveShouldBeWritten() {
+        Counter counter = Counter.builder("myCounter").register(meterRegistry);
+        counter.increment();
+        assertThat(meterRegistry.writeCounter(counter,true)).containsExactly("myCounter,metric_type=counter value=1 1");
+    }
+
+    @Test
+    void writeCounterWithoutPartialStepActiveShouldBeWritten() {
+        Counter counter = Counter.builder("myCounter").register(meterRegistry);
+        counter.increment();
+        assertThat(meterRegistry.writeCounter(counter,false)).containsExactly("myCounter,metric_type=counter value=0 1");
+    }
+
+    @Test
+    void writeSummaryWithPartialStepActiveShouldBeWritten() {
+        DistributionSummary summary = DistributionSummary.builder("myDistributionSummary").register(meterRegistry);
+        summary.record(1);
+        assertThat(meterRegistry.writeSummary(summary,true)).containsExactly("myDistributionSummary,metric_type=histogram sum=1,count=1,mean=1,upper=1 1");
+    }
+
+    @Test
+    void writeSummaryWithoutPartialStepActiveShouldBeWritten() {
+        DistributionSummary summary = DistributionSummary.builder("myDistributionSummary").register(meterRegistry);
+        summary.record(1);
+        assertThat(meterRegistry.writeSummary(summary,false)).containsExactly("myDistributionSummary,metric_type=histogram sum=0,count=0,mean=0,upper=1 1");
+
+    }
+
+    @Test
+    void writeTimerWithoutPartialStepActiveShouldBeWritten() {
+        Timer timer = Timer.builder("myTimer").register(meterRegistry);
+        timer.record(1000,TimeUnit.SECONDS);
+        assertThat(meterRegistry.writeTimer(timer,false)).containsExactly("myTimer,metric_type=histogram sum=0,count=0,mean=0,upper=1000000 1");
+
+    }
+
+    @Test
+    void writeTimerWithPartialStepActiveShouldBeWritten() {
+        Timer timer = Timer.builder("myTimer").register(meterRegistry);
+        timer.record(1000,TimeUnit.SECONDS);
+        assertThat(meterRegistry.writeTimer(timer,true)).containsExactly("myTimer,metric_type=histogram sum=1000000,count=1,mean=1000000,upper=1000000 1");
+
+    }
+
+    @Test
     void writeCounterWithFunctionCounterShouldDropInfiniteValues() {
         FunctionCounter counter = FunctionCounter.builder("myCounter", Double.POSITIVE_INFINITY, Number::doubleValue).register(meterRegistry);
         clock.add(config.step());
@@ -131,7 +176,7 @@ class InfluxMeterRegistryTest {
         Measurement m3 = new Measurement(() -> 5d, Statistic.TOTAL_TIME);
         Meter meter = Meter.builder("my.custom", Meter.Type.OTHER, Arrays.asList(m1, m2, m3)).register(meterRegistry);
 
-        assertThat(meterRegistry.writeMeter(meter).collect(Collectors.joining())).isEqualTo(expectedInfluxLine);
+        assertThat(meterRegistry.writeMeter(meter,false).collect(Collectors.joining())).isEqualTo(expectedInfluxLine);
     }
 
     @Test
@@ -141,7 +186,7 @@ class InfluxMeterRegistryTest {
         Measurement measurement3 = new Measurement(() -> Double.NaN, Statistic.VALUE);
         List<Measurement> measurements = Arrays.asList(measurement1, measurement2, measurement3);
         Meter meter = Meter.builder("my.meter", Meter.Type.GAUGE, measurements).register(this.meterRegistry);
-        assertThat(meterRegistry.writeMeter(meter)).isEmpty();
+        assertThat(meterRegistry.writeMeter(meter,false)).isEmpty();
     }
 
     @Test
@@ -153,14 +198,20 @@ class InfluxMeterRegistryTest {
         Measurement measurement5 = new Measurement(() -> 2d, Statistic.VALUE);
         List<Measurement> measurements = Arrays.asList(measurement1, measurement2, measurement3, measurement4, measurement5);
         Meter meter = Meter.builder("my.meter", Meter.Type.GAUGE, measurements).register(this.meterRegistry);
-        assertThat(meterRegistry.writeMeter(meter)).containsExactly("my_meter,metric_type=gauge value=1,value=2 1");
+        assertThat(meterRegistry.writeMeter(meter,false)).containsExactly("my_meter,metric_type=gauge value=1,value=2 1");
     }
 
     @Test
     void nanFunctionTimerShouldNotBeWritten() {
         FunctionTimer timer = FunctionTimer.builder("myFunctionTimer", Double.NaN, Number::longValue, Number::doubleValue, TimeUnit.MILLISECONDS).register(meterRegistry);
         clock.add(config.step());
-        assertThat(meterRegistry.writeFunctionTimer(timer)).isEmpty();
+        assertThat(meterRegistry.writeFunctionTimer(timer,false)).isEmpty();
+    }
+
+    @Test
+    void partialStepFunctionTimerShouldBeWritten() {
+        FunctionTimer timer = FunctionTimer.builder("myFunctionTimerPartialStep", Double.valueOf(1), Number::longValue, Number::doubleValue, TimeUnit.MILLISECONDS).register(meterRegistry);
+        assertThat(meterRegistry.writeFunctionTimer(timer,false)).isNotEmpty();
     }
 
     @Test
@@ -191,7 +242,7 @@ class InfluxMeterRegistryTest {
                 return Double.NaN;
             }
         };
-        assertThat(meterRegistry.writeFunctionTimer(functionTimer))
+        assertThat(meterRegistry.writeFunctionTimer(functionTimer,false))
                 .containsOnly("func_timer,metric_type=histogram sum=1,count=1 1");
     }
 }
