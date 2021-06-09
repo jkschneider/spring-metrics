@@ -177,7 +177,7 @@ public class CaffeineCacheMetrics extends CacheMeterBinder {
                 .description("The sum of weights of evicted entries. This total does not include manual invalidations.")
                 .register(registry);
 
-        if (cache instanceof LoadingCache) {
+        if (cache.get() instanceof LoadingCache) {
             // dividing these gives you a measure of load latency
             TimeGauge.builder("cache.load.duration", cache.get(), TimeUnit.NANOSECONDS, c -> c.stats().totalLoadTime())
                     .tags(getTagsWithCacheName())
