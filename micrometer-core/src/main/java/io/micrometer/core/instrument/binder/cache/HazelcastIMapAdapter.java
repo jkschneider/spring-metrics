@@ -18,8 +18,11 @@ package io.micrometer.core.instrument.binder.cache;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
+import java.lang.ref.WeakReference;
 
 import static java.lang.invoke.MethodType.methodType;
+
+import io.micrometer.core.lang.Nullable;
 
 /**
  * Adapter for Hazelcast {@code IMap} class created to provide support for both Hazelcast 3 and Hazelcast 4 at the
@@ -39,10 +42,10 @@ class HazelcastIMapAdapter {
         GET_LOCAL_MAP_STATS = resolveIMapMethod("getLocalMapStats", methodType(CLASS_LOCAL_MAP));
     }
 
-    private final Object cache;
+    private final WeakReference<Object> cache;
 
     HazelcastIMapAdapter(Object cache) {
-        this.cache = cache;
+        this.cache = new WeakReference<>(cache);
     }
 
     static String nameOf(Object cache) {
@@ -53,8 +56,14 @@ class HazelcastIMapAdapter {
         }
     }
 
+    @Nullable
     LocalMapStats getLocalMapStats() {
-        Object result = invoke(GET_LOCAL_MAP_STATS, cache);
+        Object ref = cache.get();
+        if (ref == null) {
+            return null;
+        }
+
+        Object result = invoke(GET_LOCAL_MAP_STATS, ref);
         return result == null ? null : new LocalMapStats(result);
     }
 

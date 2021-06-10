@@ -15,6 +15,8 @@
  */
 package io.micrometer.core.instrument.binder.cache;
 
+import java.lang.ref.WeakReference;
+
 import io.micrometer.core.instrument.*;
 import io.micrometer.core.instrument.binder.BaseUnits;
 import io.micrometer.core.lang.NonNullApi;
@@ -30,11 +32,11 @@ import net.sf.ehcache.statistics.StatisticsGateway;
 @NonNullApi
 @NonNullFields
 public class EhCache2Metrics extends CacheMeterBinder {
-    private final StatisticsGateway stats;
+    private final WeakReference<StatisticsGateway> stats;
 
     public EhCache2Metrics(Ehcache cache, Iterable<Tag> tags) {
         super(cache, cache.getName(), tags);
-        this.stats = cache.getStatistics();
+        this.stats = new WeakReference<>(cache.getStatistics());
     }
 
     /**
@@ -64,47 +66,72 @@ public class EhCache2Metrics extends CacheMeterBinder {
 
     @Override
     protected Long size() {
-        return stats.getSize();
+        StatisticsGateway ref = stats.get();
+        if (ref != null) {
+            return ref.getSize();
+        }
+
+        return null;
     }
 
     @Override
     protected long hitCount() {
-        return stats.cacheHitCount();
+        StatisticsGateway ref = stats.get();
+        if (ref != null) {
+            return ref.cacheHitCount();
+        }
+
+        return 0L;
     }
 
     @Override
     protected Long missCount() {
-        return stats.cacheMissCount();
+        StatisticsGateway ref = stats.get();
+        if (ref != null) {
+            return ref.cacheMissCount();
+        }
+
+        return null;
     }
 
     @Override
     protected Long evictionCount() {
-        return stats.cacheEvictedCount();
+        StatisticsGateway ref = stats.get();
+        if (ref != null) {
+            return ref.cacheEvictedCount();
+        }
+
+        return null;
     }
 
     @Override
     protected long putCount() {
-        return stats.cachePutCount();
+        StatisticsGateway ref = stats.get();
+        if (ref != null) {
+            return ref.cachePutCount();
+        }
+
+        return 0L;
     }
 
     @Override
     protected void bindImplementationSpecificMetrics(MeterRegistry registry) {
-        Gauge.builder("cache.remoteSize", stats, StatisticsGateway::getRemoteSize)
+        Gauge.builder("cache.remoteSize", stats.get(), StatisticsGateway::getRemoteSize)
                 .tags(getTagsWithCacheName())
                 .description("The number of entries held remotely in this cache")
                 .register(registry);
 
-        FunctionCounter.builder("cache.removals", stats, StatisticsGateway::cacheRemoveCount)
+        FunctionCounter.builder("cache.removals", stats.get(), StatisticsGateway::cacheRemoveCount)
                 .tags(getTagsWithCacheName())
                 .description("Cache removals")
                 .register(registry);
 
-        FunctionCounter.builder("cache.puts.added", stats, StatisticsGateway::cachePutAddedCount)
+        FunctionCounter.builder("cache.puts.added", stats.get(), StatisticsGateway::cachePutAddedCount)
                 .tags(getTagsWithCacheName()).tags("result", "added")
                 .description("Cache puts resulting in a new key/value pair")
                 .register(registry);
 
-        FunctionCounter.builder("cache.puts.added", stats, StatisticsGateway::cachePutUpdatedCount)
+        FunctionCounter.builder("cache.puts.added", stats.get(), StatisticsGateway::cachePutUpdatedCount)
                 .tags(getTagsWithCacheName()).tags("result", "updated")
                 .description("Cache puts resulting in an updated value")
                 .register(registry);
@@ -114,19 +141,19 @@ public class EhCache2Metrics extends CacheMeterBinder {
         rollbackTransactionMetrics(registry);
         recoveryTransactionMetrics(registry);
 
-        Gauge.builder("cache.local.offheap.size", stats, StatisticsGateway::getLocalOffHeapSizeInBytes)
+        Gauge.builder("cache.local.offheap.size", stats.get(), StatisticsGateway::getLocalOffHeapSizeInBytes)
                 .tags(getTagsWithCacheName())
                 .description("Local off-heap size")
                 .baseUnit(BaseUnits.BYTES)
                 .register(registry);
 
-        Gauge.builder("cache.local.heap.size", stats, StatisticsGateway::getLocalHeapSizeInBytes)
+        Gauge.builder("cache.local.heap.size", stats.get(), StatisticsGateway::getLocalHeapSizeInBytes)
                 .tags(getTagsWithCacheName())
                 .description("Local heap size")
                 .baseUnit(BaseUnits.BYTES)
                 .register(registry);
 
-        Gauge.builder("cache.local.disk.size", stats, StatisticsGateway::getLocalDiskSizeInBytes)
+        Gauge.builder("cache.local.disk.size", stats.get(), StatisticsGateway::getLocalDiskSizeInBytes)
                 .tags(getTagsWithCacheName())
                 .description("Local disk size")
                 .baseUnit(BaseUnits.BYTES)
@@ -134,13 +161,13 @@ public class EhCache2Metrics extends CacheMeterBinder {
     }
 
     private void missMetrics(MeterRegistry registry) {
-        FunctionCounter.builder("cache.misses", stats, StatisticsGateway::cacheMissExpiredCount)
+        FunctionCounter.builder("cache.misses", stats.get(), StatisticsGateway::cacheMissExpiredCount)
                 .tags(getTagsWithCacheName())
                 .tags("reason", "expired")
                 .description("The number of times cache lookup methods have not returned a value, due to expiry")
                 .register(registry);
 
-        FunctionCounter.builder("cache.misses", stats, StatisticsGateway::cacheMissNotFoundCount)
+        FunctionCounter.builder("cache.misses", stats.get(), StatisticsGateway::cacheMissNotFoundCount)
                 .tags(getTagsWithCacheName())
                 .tags("reason", "notFound")
                 .description("The number of times cache lookup methods have not returned a value, because the key was not found")
@@ -148,19 +175,19 @@ public class EhCache2Metrics extends CacheMeterBinder {
     }
 
     private void commitTransactionMetrics(MeterRegistry registry) {
-        FunctionCounter.builder("cache.xa.commits", stats, StatisticsGateway::xaCommitReadOnlyCount)
+        FunctionCounter.builder("cache.xa.commits", stats.get(), StatisticsGateway::xaCommitReadOnlyCount)
                 .tags(getTagsWithCacheName())
                 .tags("result", "readOnly")
                 .description("Transaction commits that had a read-only result")
                 .register(registry);
 
-        FunctionCounter.builder("cache.xa.commits", stats, StatisticsGateway::xaCommitExceptionCount)
+        FunctionCounter.builder("cache.xa.commits", stats.get(), StatisticsGateway::xaCommitExceptionCount)
                 .tags(getTagsWithCacheName())
                 .tags("result", "exception")
                 .description("Transaction commits that failed")
                 .register(registry);
 
-        FunctionCounter.builder("cache.xa.commits", stats, StatisticsGateway::xaCommitCommittedCount)
+        FunctionCounter.builder("cache.xa.commits", stats.get(), StatisticsGateway::xaCommitCommittedCount)
                 .tags(getTagsWithCacheName())
                 .tags("result", "committed")
                 .description("Transaction commits that failed")
@@ -168,13 +195,13 @@ public class EhCache2Metrics extends CacheMeterBinder {
     }
 
     private void rollbackTransactionMetrics(MeterRegistry registry) {
-        FunctionCounter.builder("cache.xa.rollbacks", stats, StatisticsGateway::xaRollbackExceptionCount)
+        FunctionCounter.builder("cache.xa.rollbacks", stats.get(), StatisticsGateway::xaRollbackExceptionCount)
                 .tags(getTagsWithCacheName())
                 .tags("result", "exception")
                 .description("Transaction rollbacks that failed")
                 .register(registry);
 
-        FunctionCounter.builder("cache.xa.rollbacks", stats, StatisticsGateway::xaRollbackSuccessCount)
+        FunctionCounter.builder("cache.xa.rollbacks", stats.get(), StatisticsGateway::xaRollbackSuccessCount)
                 .tags(getTagsWithCacheName())
                 .tags("result", "success")
                 .description("Transaction rollbacks that failed")
@@ -182,13 +209,13 @@ public class EhCache2Metrics extends CacheMeterBinder {
     }
 
     private void recoveryTransactionMetrics(MeterRegistry registry) {
-        FunctionCounter.builder("cache.xa.recoveries", stats, StatisticsGateway::xaRecoveryNothingCount)
+        FunctionCounter.builder("cache.xa.recoveries", stats.get(), StatisticsGateway::xaRecoveryNothingCount)
                 .tags(getTagsWithCacheName())
                 .tags("result", "nothing")
                 .description("Recovery transactions that recovered nothing")
                 .register(registry);
 
-        FunctionCounter.builder("cache.xa.recoveries", stats, StatisticsGateway::xaRecoveryRecoveredCount)
+        FunctionCounter.builder("cache.xa.recoveries", stats.get(), StatisticsGateway::xaRecoveryRecoveredCount)
                 .tags(getTagsWithCacheName())
                 .tags("result", "success")
                 .description("Successful recovery transaction")
