@@ -19,7 +19,8 @@ import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.config.NamingConvention;
 import io.micrometer.core.lang.Nullable;
 
-import java.util.regex.Pattern;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * {@link NamingConvention} for Influx.
@@ -29,8 +30,8 @@ import java.util.regex.Pattern;
  */
 public class InfluxNamingConvention implements NamingConvention {
 
-    // https://docs.influxdata.com/influxdb/v1.3/write_protocols/line_protocol_reference/#special-characters
-    private static final Pattern PATTERN_SPECIAL_CHARACTERS = Pattern.compile("([, =\"])");
+    private final Map<String, String> replaceSpecialCharactersMap;
+    private final StringBuilder sb;
 
     private final NamingConvention delegate;
 
@@ -44,6 +45,15 @@ public class InfluxNamingConvention implements NamingConvention {
 
     public InfluxNamingConvention(NamingConvention delegate) {
         this.delegate = delegate;
+
+        // https://docs.influxdata.com/influxdb/v1.3/write_protocols/line_protocol_reference/#special-characters
+        replaceSpecialCharactersMap = new HashMap<>();
+        replaceSpecialCharactersMap.put(",", "\\,");
+        replaceSpecialCharactersMap.put(" ", "\\ ");
+        replaceSpecialCharactersMap.put("=", "\\=");
+        replaceSpecialCharactersMap.put("\"", "\\\"");
+
+        sb = new StringBuilder();
     }
 
     @Override
@@ -66,6 +76,29 @@ public class InfluxNamingConvention implements NamingConvention {
     }
 
     private String escape(String string) {
-        return PATTERN_SPECIAL_CHARACTERS.matcher(string).replaceAll("\\\\$1");
+        return replaceFromMap(string, replaceSpecialCharactersMap);
+    }
+
+    private String replaceFromMap(String string, Map<String, String> replacements) {
+        StringBuilder sb = newStringBuilder(string);
+        for (Map.Entry<String, String> entry : replacements.entrySet()) {
+            String key = entry.getKey();
+            String value = entry.getValue();
+
+            int start = sb.indexOf(key, 0);
+            while (start > -1) {
+                int end = start + key.length();
+                int nextSearchStart = start + value.length();
+                sb.replace(start, end, value);
+                start = sb.indexOf(key, nextSearchStart);
+            }
+        }
+        return sb.toString();
+    }
+
+    private StringBuilder newStringBuilder(String string) {
+        sb.setLength(0);
+        sb.append(string);
+        return sb;
     }
 }
