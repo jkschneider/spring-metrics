@@ -116,7 +116,8 @@ public class TimeWindowMax {
     }
 
     private void rotate() {
-        long timeSinceLastRotateMillis = clock.wallTime() - lastRotateTimestampMillis;
+        long wallTime = clock.wallTime();
+        long timeSinceLastRotateMillis = wallTime - lastRotateTimestampMillis;
         if (timeSinceLastRotateMillis < durationBetweenRotatesMillis) {
             // Need to wait more for next rotation.
             return;
@@ -128,8 +129,18 @@ public class TimeWindowMax {
         }
 
         try {
-            int iterations = 0;
             synchronized (this) {
+                if (timeSinceLastRotateMillis >= durationBetweenRotatesMillis * ringBuffer.length) {
+                    // it past too many time since this instance was used, we can just cleare
+                    for (AtomicLong bufferItem: ringBuffer) {
+                        bufferItem.set(0);
+                    }
+                    currentBucket = 0;
+                    lastRotateTimestampMillis = wallTime - timeSinceLastRotateMillis % durationBetweenRotatesMillis;
+                    return;
+                }
+
+                int iterations = 0;
                 do {
                     ringBuffer[currentBucket].set(0);
                     if (++currentBucket >= ringBuffer.length) {
