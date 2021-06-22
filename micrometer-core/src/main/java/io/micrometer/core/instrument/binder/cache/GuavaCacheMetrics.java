@@ -26,6 +26,7 @@ import io.micrometer.core.lang.Nullable;
 import java.lang.ref.WeakReference;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
+import java.util.function.ToLongFunction;
 
 /**
  * @author Jon Schneider
@@ -129,10 +130,10 @@ public class GuavaCacheMetrics extends CacheMeterBinder {
         return defaultValue;
     }
 
-    private long getOrDefault(Function<Cache<?, ?>, Long> function, long defaultValue) {
+    private long getOrDefault(ToLongFunction<Cache<?, ?>> function, long defaultValue) {
         Cache<?, ?> ref = cache.get();
         if (ref != null) {
-            return function.apply(ref);
+            return function.applyAsLong(ref);
         }
 
         return defaultValue;

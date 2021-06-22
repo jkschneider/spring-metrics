@@ -25,6 +25,7 @@ import io.micrometer.core.lang.Nullable;
 import java.lang.ref.WeakReference;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
+import java.util.function.ToLongFunction;
 
 /**
  * Collect metrics from Caffeine's {@link com.github.benmanes.caffeine.cache.Cache}. {@link CaffeineStatsCounter} is an
@@ -186,10 +187,10 @@ public class CaffeineCacheMetrics extends CacheMeterBinder {
         return defaultValue;
     }
 
-    private long getOrDefault(Function<Cache<?, ?>, Long> function, long defaultValue) {
+    private long getOrDefault(ToLongFunction<Cache<?, ?>> function, long defaultValue) {
         Cache<?, ?> ref = cache.get();
         if (ref != null) {
-            return function.apply(ref);
+            return function.applyAsLong(ref);
         }
 
         return defaultValue;

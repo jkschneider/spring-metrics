@@ -17,8 +17,8 @@ package io.micrometer.core.instrument.binder.cache;
 
 import java.lang.ref.WeakReference;
 import java.util.function.Function;
+import java.util.function.ToLongFunction;
 
-import com.github.benmanes.caffeine.cache.Cache;
 import io.micrometer.core.instrument.*;
 import io.micrometer.core.instrument.binder.BaseUnits;
 import io.micrometer.core.lang.NonNullApi;
@@ -210,10 +210,10 @@ public class EhCache2Metrics extends CacheMeterBinder {
         return defaultValue;
     }
 
-    private long getOrDefault(Function<StatisticsGateway, Long> function, long defaultValue) {
+    private long getOrDefault(ToLongFunction<StatisticsGateway> function, long defaultValue) {
         StatisticsGateway ref = stats.get();
         if (ref != null) {
-            return function.apply(ref);
+            return function.applyAsLong(ref);
         }
 
         return defaultValue;
