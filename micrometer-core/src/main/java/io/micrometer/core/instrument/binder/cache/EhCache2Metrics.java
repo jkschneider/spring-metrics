@@ -210,8 +210,7 @@ public class EhCache2Metrics extends CacheMeterBinder {
         return defaultValue;
     }
 
-    @Nullable
-    private long getOrDefault(Function<StatisticsGateway, Long> function, @Nullable long defaultValue) {
+    private long getOrDefault(Function<StatisticsGateway, Long> function, long defaultValue) {
         StatisticsGateway ref = stats.get();
         if (ref != null) {
             return function.apply(ref);

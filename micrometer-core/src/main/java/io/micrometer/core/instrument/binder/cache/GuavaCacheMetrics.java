@@ -129,8 +129,7 @@ public class GuavaCacheMetrics extends CacheMeterBinder {
         return defaultValue;
     }
 
-    @Nullable
-    private long getOrDefault(Function<Cache<?, ?>, Long> function, @Nullable long defaultValue) {
+    private long getOrDefault(Function<Cache<?, ?>, Long> function, long defaultValue) {
         Cache<?, ?> ref = cache.get();
         if (ref != null) {
             return function.apply(ref);
