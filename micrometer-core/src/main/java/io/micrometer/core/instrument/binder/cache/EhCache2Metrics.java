@@ -16,11 +16,14 @@
 package io.micrometer.core.instrument.binder.cache;
 
 import java.lang.ref.WeakReference;
+import java.util.function.Function;
 
+import com.github.benmanes.caffeine.cache.Cache;
 import io.micrometer.core.instrument.*;
 import io.micrometer.core.instrument.binder.BaseUnits;
 import io.micrometer.core.lang.NonNullApi;
 import io.micrometer.core.lang.NonNullFields;
+import io.micrometer.core.lang.Nullable;
 import net.sf.ehcache.Ehcache;
 import net.sf.ehcache.statistics.StatisticsGateway;
 
@@ -66,52 +69,27 @@ public class EhCache2Metrics extends CacheMeterBinder {
 
     @Override
     protected Long size() {
-        StatisticsGateway ref = stats.get();
-        if (ref != null) {
-            return ref.getSize();
-        }
-
-        return null;
+        return getOrDefault(StatisticsGateway::getSize, null);
     }
 
     @Override
     protected long hitCount() {
-        StatisticsGateway ref = stats.get();
-        if (ref != null) {
-            return ref.cacheHitCount();
-        }
-
-        return 0L;
+        return getOrDefault(StatisticsGateway::cacheHitCount, 0L);
     }
 
     @Override
     protected Long missCount() {
-        StatisticsGateway ref = stats.get();
-        if (ref != null) {
-            return ref.cacheMissCount();
-        }
-
-        return null;
+        return getOrDefault(StatisticsGateway::cacheMissCount, null);
     }
 
     @Override
     protected Long evictionCount() {
-        StatisticsGateway ref = stats.get();
-        if (ref != null) {
-            return ref.cacheEvictedCount();
-        }
-
-        return null;
+        return getOrDefault(StatisticsGateway::cacheEvictedCount, null);
     }
 
     @Override
     protected long putCount() {
-        StatisticsGateway ref = stats.get();
-        if (ref != null) {
-            return ref.cachePutCount();
-        }
-
-        return 0L;
+        return getOrDefault(StatisticsGateway::cachePutCount, 0L);
     }
 
     @Override
@@ -220,5 +198,25 @@ public class EhCache2Metrics extends CacheMeterBinder {
                 .tags("result", "success")
                 .description("Successful recovery transaction")
                 .register(registry);
+    }
+
+    @Nullable
+    private Long getOrDefault(Function<StatisticsGateway, Long> function, @Nullable Long defaultValue) {
+        StatisticsGateway ref = stats.get();
+        if (ref != null) {
+            return function.apply(ref);
+        }
+
+        return defaultValue;
+    }
+
+    @Nullable
+    private long getOrDefault(Function<StatisticsGateway, Long> function, @Nullable long defaultValue) {
+        StatisticsGateway ref = stats.get();
+        if (ref != null) {
+            return function.apply(ref);
+        }
+
+        return defaultValue;
     }
 }

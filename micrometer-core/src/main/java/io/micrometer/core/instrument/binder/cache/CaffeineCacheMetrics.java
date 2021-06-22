@@ -20,9 +20,11 @@ import com.github.benmanes.caffeine.cache.stats.CacheStats;
 import io.micrometer.core.instrument.*;
 import io.micrometer.core.lang.NonNullApi;
 import io.micrometer.core.lang.NonNullFields;
+import io.micrometer.core.lang.Nullable;
 
 import java.lang.ref.WeakReference;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
 
 /**
  * Collect metrics from Caffeine's {@link com.github.benmanes.caffeine.cache.Cache}. {@link CaffeineStatsCounter} is an
@@ -122,52 +124,27 @@ public class CaffeineCacheMetrics extends CacheMeterBinder {
 
     @Override
     protected Long size() {
-        Cache<?, ?> ref = cache.get();
-        if (ref != null) {
-            return ref.estimatedSize();
-        }
-
-        return null;
+        return getOrDefault(Cache::estimatedSize, null);
     }
 
     @Override
     protected long hitCount() {
-        Cache<?, ?> ref = cache.get();
-        if (ref != null) {
-            return ref.stats().hitCount();
-        }
-
-        return 0L;
+        return getOrDefault(c -> c.stats().hitCount(), 0L);
     }
 
     @Override
     protected Long missCount() {
-        Cache<?, ?> ref = cache.get();
-        if (ref != null) {
-            return ref.stats().missCount();
-        }
-
-        return null;
+        return getOrDefault(c -> c.stats().missCount(), null);
     }
 
     @Override
     protected Long evictionCount() {
-        Cache<?, ?> ref = cache.get();
-        if (ref != null) {
-            return ref.stats().evictionCount();
-        }
-
-        return null;
+        return getOrDefault(c -> c.stats().evictionCount(), null);
     }
 
     @Override
     protected long putCount() {
-        Cache<?, ?> ref = cache.get();
-        if (ref != null) {
-            return ref.stats().loadCount();
-        }
-
-        return 0L;
+        return getOrDefault(c -> c.stats().loadCount(), 0L);
     }
 
     @Override
@@ -197,5 +174,25 @@ public class CaffeineCacheMetrics extends CacheMeterBinder {
                             "because no value was found or an exception was thrown while loading")
                     .register(registry);
         }
+    }
+
+    @Nullable
+    private Long getOrDefault(Function<Cache<?, ?>, Long> function, @Nullable Long defaultValue) {
+        Cache<?, ?> ref = cache.get();
+        if (ref != null) {
+            return function.apply(ref);
+        }
+
+        return defaultValue;
+    }
+
+    @Nullable
+    private long getOrDefault(Function<Cache<?, ?>, Long> function, @Nullable long defaultValue) {
+        Cache<?, ?> ref = cache.get();
+        if (ref != null) {
+            return function.apply(ref);
+        }
+
+        return defaultValue;
     }
 }

@@ -21,9 +21,11 @@ import com.google.common.cache.LoadingCache;
 import io.micrometer.core.instrument.*;
 import io.micrometer.core.lang.NonNullApi;
 import io.micrometer.core.lang.NonNullFields;
+import io.micrometer.core.lang.Nullable;
 
 import java.lang.ref.WeakReference;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
 
 /**
  * @author Jon Schneider
@@ -73,52 +75,27 @@ public class GuavaCacheMetrics extends CacheMeterBinder {
 
     @Override
     protected Long size() {
-        Cache<?, ?> ref = cache.get();
-        if (ref != null) {
-            return ref.size();
-        }
-
-        return null;
+        return getOrDefault(Cache::size, null);
     }
 
     @Override
     protected long hitCount() {
-        Cache<?, ?> ref = cache.get();
-        if (ref != null) {
-            return ref.stats().hitCount();
-        }
-
-        return 0L;
+        return getOrDefault(c -> c.stats().hitCount(), 0L);
     }
 
     @Override
     protected Long missCount() {
-        Cache<?, ?> ref = cache.get();
-        if (ref != null) {
-            return ref.stats().missCount();
-        }
-
-        return null;
+        return getOrDefault(c -> c.stats().missCount(), null);
     }
 
     @Override
     protected Long evictionCount() {
-        Cache<?, ?> ref = cache.get();
-        if (ref != null) {
-            return ref.stats().evictionCount();
-        }
-
-        return null;
+        return getOrDefault(c -> c.stats().evictionCount(), null);
     }
 
     @Override
     protected long putCount() {
-        Cache<?, ?> ref = cache.get();
-        if (ref != null) {
-            return ref.stats().loadCount();
-        }
-
-        return 0L;
+        return getOrDefault(c -> c.stats().loadCount(), 0L);
     }
 
     @Override
@@ -140,5 +117,25 @@ public class GuavaCacheMetrics extends CacheMeterBinder {
                     .description("The number of times cache lookup methods threw an exception while loading a new value")
                     .register(registry);
         }
+    }
+
+    @Nullable
+    private Long getOrDefault(Function<Cache<?, ?>, Long> function, @Nullable Long defaultValue) {
+        Cache<?, ?> ref = cache.get();
+        if (ref != null) {
+            return function.apply(ref);
+        }
+
+        return defaultValue;
+    }
+
+    @Nullable
+    private long getOrDefault(Function<Cache<?, ?>, Long> function, @Nullable long defaultValue) {
+        Cache<?, ?> ref = cache.get();
+        if (ref != null) {
+            return function.apply(ref);
+        }
+
+        return defaultValue;
     }
 }
