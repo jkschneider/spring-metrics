@@ -45,9 +45,6 @@ class JmxMeterRegistryTest {
         // com.codahale.metrics.Timer uses a tick interval of 5 seconds
         clock.addSeconds(6);
 
-        // Uncomment this makes the test pass
-        //Thread.sleep( 5_000L );
-
         MBeanServer mbs = ManagementFactory.getPlatformMBeanServer();
         Double oneMinuteRate = (Double) mbs.getAttribute(new ObjectName(JmxConfig.DEFAULT.domain() + ":name=" + nameOfTimer), "OneMinuteRate");
 
