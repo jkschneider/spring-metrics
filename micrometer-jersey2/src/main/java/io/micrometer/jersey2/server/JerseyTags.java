@@ -95,7 +95,7 @@ public final class JerseyTags {
             if (isRedirection(status)) {
                 return URI_REDIRECTION;
             }
-            if (status == 404) {
+            if (status == 404 && event.getUriInfo().getMatchedResourceMethod() == null) {
                 return URI_NOT_FOUND;
             }
         }
