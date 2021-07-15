@@ -137,7 +137,7 @@ public class SignalFxMeterRegistry extends StepMeterRegistry {
         });
     }
 
-    private SignalFxProtocolBuffers.DataPoint.Builder addDatapoint(Meter meter, SignalFxProtocolBuffers.MetricType metricType, @Nullable String statSuffix, Number value) {
+    SignalFxProtocolBuffers.DataPoint.Builder addDatapoint(Meter meter, SignalFxProtocolBuffers.MetricType metricType, @Nullable String statSuffix, Number value) {
         SignalFxProtocolBuffers.Datum.Builder datumBuilder = SignalFxProtocolBuffers.Datum.newBuilder();
         SignalFxProtocolBuffers.Datum datum = (value instanceof Double ?
                 datumBuilder.setDoubleValue((Double) value) :
@@ -152,14 +152,21 @@ public class SignalFxMeterRegistry extends StepMeterRegistry {
                 .setMetricType(metricType)
                 .setValue(datum);
 
+        String sourceTagValue = config().namingConvention().tagValue(this.config.source());
+        dataPointBuilder.addDimensions(dimension("source", sourceTagValue));
+
         for (Tag tag : getConventionTags(meter.getId())) {
-            dataPointBuilder.addDimensions(SignalFxProtocolBuffers.Dimension.newBuilder()
-                    .setKey(tag.getKey())
-                    .setValue(tag.getValue())
-                    .build());
+            dataPointBuilder.addDimensions(dimension(tag.getKey(), tag.getValue()));
         }
 
         return dataPointBuilder;
+    }
+
+    private SignalFxProtocolBuffers.Dimension dimension(String key, String value) {
+        return SignalFxProtocolBuffers.Dimension.newBuilder()
+                .setKey(key)
+                .setValue(value)
+                .build();
     }
 
     // VisibleForTesting

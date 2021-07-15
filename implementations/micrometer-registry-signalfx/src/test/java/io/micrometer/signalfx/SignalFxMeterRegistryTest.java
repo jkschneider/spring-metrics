@@ -15,6 +15,8 @@
  */
 package io.micrometer.signalfx;
 
+import com.signalfx.metrics.protobuf.SignalFxProtocolBuffers;
+import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.LongTaskTimer;
 import io.micrometer.core.instrument.MockClock;
 import org.junit.jupiter.api.Test;
@@ -40,6 +42,10 @@ class SignalFxMeterRegistryTest {
             return "accessToken";
         }
 
+        @Override
+        public String source() {
+            return "test-source";
+        }
     };
 
     private final SignalFxMeterRegistry registry = new SignalFxMeterRegistry(this.config, new MockClock());
@@ -48,6 +54,27 @@ class SignalFxMeterRegistryTest {
     void addLongTaskTimer() {
         LongTaskTimer longTaskTimer = LongTaskTimer.builder("my.long.task.timer").register(this.registry);
         assertThat(this.registry.addLongTaskTimer(longTaskTimer)).hasSize(2);
+    }
+
+    @Test
+    void sourceTagIsAddedToDimensions() {
+        SignalFxProtocolBuffers.DataPoint dataPoint = whenDataPointGenerated(registry);
+
+        assertThat(dataPoint.getDimensionsList()).hasSize(3)
+                .containsExactlyInAnyOrder(dimension("source", "test-source"),
+                        dimension("sample_tag", "value"),
+                        dimension("normalized", "value1"));
+    }
+
+    private SignalFxProtocolBuffers.DataPoint whenDataPointGenerated(SignalFxMeterRegistry registry) {
+        Counter counter = registry.counter("sample",
+                "sample_tag", "value", "sf_normalized", "value1");
+
+        return registry.addDatapoint(counter, SignalFxProtocolBuffers.MetricType.COUNTER, null, counter.count()).build();
+    }
+
+    private SignalFxProtocolBuffers.Dimension dimension(String name, String value) {
+        return SignalFxProtocolBuffers.Dimension.newBuilder().setKey(name).setValue(value).build();
     }
 
 }
