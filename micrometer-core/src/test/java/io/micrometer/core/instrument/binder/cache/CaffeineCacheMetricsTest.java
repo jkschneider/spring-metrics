@@ -21,14 +21,16 @@ import com.github.benmanes.caffeine.cache.LoadingCache;
 import com.github.benmanes.caffeine.cache.stats.CacheStats;
 
 import io.micrometer.core.instrument.FunctionCounter;
+import io.micrometer.core.instrument.FunctionTimer;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
-import io.micrometer.core.instrument.TimeGauge;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+
+import java.util.concurrent.TimeUnit;
 
 /**
  * Tests for {@link CaffeineCacheMetrics}.
@@ -52,8 +54,9 @@ class CaffeineCacheMetricsTest extends AbstractCacheMetricsTest {
         assertThat(evictionWeight.count()).isEqualTo(stats.evictionWeight());
 
         // specific to LoadingCache instance
-        TimeGauge loadDuration = fetch(registry, "cache.load.duration").timeGauge();
-        assertThat(loadDuration.value()).isEqualTo(stats.totalLoadTime());
+        FunctionTimer loadDuration = fetch(registry, "cache.load.duration").functionTimer();
+        assertThat(loadDuration.totalTime(TimeUnit.NANOSECONDS)).isEqualTo(stats.totalLoadTime());
+        assertThat(loadDuration.count()).isEqualTo(stats.loadCount());
 
         FunctionCounter successfulLoad = fetch(registry, "cache.load", Tags.of("result", "success")).functionCounter();
         assertThat(successfulLoad.count()).isEqualTo(stats.loadSuccessCount());

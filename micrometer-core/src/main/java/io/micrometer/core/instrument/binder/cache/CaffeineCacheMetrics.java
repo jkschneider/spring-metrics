@@ -153,9 +153,11 @@ public class CaffeineCacheMetrics extends CacheMeterBinder {
 
         if (cache instanceof LoadingCache) {
             // dividing these gives you a measure of load latency
-            TimeGauge.builder("cache.load.duration", cache, TimeUnit.NANOSECONDS, c -> c.stats().totalLoadTime())
+            FunctionTimer.builder("cache.load.duration", cache,
+                                  c -> c.stats().loadCount(),
+                                  c -> c.stats().totalLoadTime(), TimeUnit.NANOSECONDS)
                     .tags(getTagsWithCacheName())
-                    .description("The time the cache has spent loading new values")
+                    .description("Cache loads, including both successes and failures")
                     .register(registry);
 
             FunctionCounter.builder("cache.load", cache, c -> c.stats().loadSuccessCount())
