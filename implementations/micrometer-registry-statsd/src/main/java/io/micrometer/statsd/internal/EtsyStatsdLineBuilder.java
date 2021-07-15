@@ -39,7 +39,7 @@ public class EtsyStatsdLineBuilder extends FlavorStatsdLineBuilder {
     }
 
     @Override
-    String line(String amount, @Nullable Statistic stat, String type) {
+    protected String line(String amount, @Nullable Statistic stat, String type) {
         updateIfNamingConventionChanged();
         return nameByStatistic(stat) + ":" + amount + "|" + type;
     }

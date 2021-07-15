@@ -76,8 +76,10 @@ import java.util.stream.DoubleStream;
 public class StatsdMeterRegistry extends MeterRegistry {
     private static final WarnThenDebugLogger warnThenDebugLogger = new WarnThenDebugLogger(StatsdMeterRegistry.class);
 
-    private final StatsdConfig statsdConfig;
-    private final HierarchicalNameMapper nameMapper;
+    @SuppressWarnings("WeakerAccess")
+    protected final StatsdConfig statsdConfig;
+    @SuppressWarnings("WeakerAccess")
+    protected final HierarchicalNameMapper nameMapper;
     private final Map<Meter.Id, StatsdPollable> pollableMeters = new ConcurrentHashMap<>();
     private final AtomicBoolean started = new AtomicBoolean();
     Sinks.Many<String> sink = new NoopManySink();
@@ -108,7 +110,8 @@ public class StatsdMeterRegistry extends MeterRegistry {
         this(config, nameMapper, namingConventionFromFlavor(config.flavor()), clock, null, null);
     }
 
-    private StatsdMeterRegistry(StatsdConfig config,
+    @SuppressWarnings("WeakerAccess")
+    public StatsdMeterRegistry(StatsdConfig config,
                                 HierarchicalNameMapper nameMapper,
                                 NamingConvention namingConvention,
                                 Clock clock,
@@ -325,7 +328,8 @@ public class StatsdMeterRegistry extends MeterRegistry {
         return gauge;
     }
 
-    private StatsdLineBuilder lineBuilder(Meter.Id id) {
+    @SuppressWarnings("WeakerAccess")
+    protected StatsdLineBuilder lineBuilder(Meter.Id id) {
         if (lineBuilderFunction == null) {
             lineBuilderFunction = id2 -> {
                 switch (statsdConfig.flavor()) {
@@ -508,6 +512,11 @@ public class StatsdMeterRegistry extends MeterRegistry {
 
         public Builder nameMapper(HierarchicalNameMapper nameMapper) {
             this.nameMapper = nameMapper;
+            return this;
+        }
+
+        public Builder namingConvention(NamingConvention namingConvention) {
+            this.namingConvention = namingConvention;
             return this;
         }
 

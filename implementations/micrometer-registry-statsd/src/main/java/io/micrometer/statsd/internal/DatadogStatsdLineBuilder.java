@@ -51,7 +51,7 @@ public class DatadogStatsdLineBuilder extends FlavorStatsdLineBuilder {
     }
 
     @Override
-    String line(String amount, @Nullable Statistic stat, String type) {
+    protected String line(String amount, @Nullable Statistic stat, String type) {
         updateIfNamingConventionChanged();
         return name + amount + "|" + type + tagsByStatistic(stat);
     }

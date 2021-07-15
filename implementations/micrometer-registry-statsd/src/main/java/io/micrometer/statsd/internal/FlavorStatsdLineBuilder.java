@@ -61,7 +61,7 @@ public abstract class FlavorStatsdLineBuilder implements StatsdLineBuilder {
         return line(DoubleFormat.decimalOrNan(timeMs), null, TYPE_TIMING);
     }
 
-    abstract String line(String amount, @Nullable Statistic stat, String type);
+    protected abstract String line(String amount, @Nullable Statistic stat, String type);
 
     protected String tags(@Nullable Statistic stat, @Nullable String otherTags, String keyValueSeparator, String preamble) {
         String tags = of(stat == null ? null : "statistic" + keyValueSeparator + stat.getTagValueRepresentation(), otherTags)
