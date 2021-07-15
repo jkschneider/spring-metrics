@@ -26,6 +26,9 @@ dependencies {
     optionalApi 'org.apache.tomcat.embed:tomcat-embed-core'
     optionalApi 'io.grpc:grpc-api'
 
+    // undertow monitoring
+    compile 'io.undertow:undertow-servlet:2.0.+', optional
+
     // apache httpcomponents monitoring
     optionalApi 'org.apache.httpcomponents:httpclient'
     optionalApi 'org.apache.httpcomponents:httpasyncclient'
