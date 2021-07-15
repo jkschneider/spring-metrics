@@ -44,7 +44,7 @@ public class PostgreSQLDatabaseMetrics implements MeterBinder {
 
     private static final String SELECT = "SELECT ";
 
-    private static final String QUERY_DEAD_TUPLE_COUNT = getUserTableQuery("n_dead_tup");
+    private static final String QUERY_DEAD_TUPLE_COUNT = getUserTableQuery("SUM(n_dead_tup)");
     private static final String QUERY_TIMED_CHECKPOINTS_COUNT = getBgWriterQuery("checkpoints_timed");
     private static final String QUERY_REQUESTED_CHECKPOINTS_COUNT = getBgWriterQuery("checkpoints_req");
     private static final String QUERY_BUFFERS_CLEAN = getBgWriterQuery("buffers_clean");
@@ -78,7 +78,7 @@ public class PostgreSQLDatabaseMetrics implements MeterBinder {
         this.beforeResetValuesCacheMap = new ConcurrentHashMap<>();
         this.previousValueCacheMap = new ConcurrentHashMap<>();
 
-        this.queryConnectionCount = getDBStatQuery(database, "SUM(numbackends)");
+        this.queryConnectionCount = getDBStatQuery(database, "numbackends");
         this.queryReadCount = getDBStatQuery(database, "tup_fetched");
         this.queryInsertCount = getDBStatQuery(database, "tup_inserted");
         this.queryTempBytes = getDBStatQuery(database, "temp_bytes");
@@ -282,7 +282,7 @@ public class PostgreSQLDatabaseMetrics implements MeterBinder {
              Statement statement = connection.createStatement();
              ResultSet resultSet = statement.executeQuery(query)) {
             if (resultSet.next()) {
-                return resultSet.getObject(1, Long.class);
+                return resultSet.getLong(1);
             }
         } catch (SQLException ignored) {
         }
