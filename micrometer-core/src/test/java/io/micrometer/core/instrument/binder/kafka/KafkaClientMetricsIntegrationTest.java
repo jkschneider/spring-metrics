@@ -15,7 +15,20 @@
  */
 package io.micrometer.core.instrument.binder.kafka;
 
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Collections;
+import java.util.Properties;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
+
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import io.micrometer.core.instrument.util.NamedThreadFactory;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -25,16 +38,15 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.jetbrains.annotations.NotNull;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.testcontainers.containers.KafkaContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
-
-import java.time.Duration;
-import java.util.Collections;
-import java.util.Properties;
 
 import static java.lang.System.out;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -42,8 +54,29 @@ import static org.assertj.core.api.Assertions.assertThat;
 @Testcontainers
 @Tag("docker")
 class KafkaClientMetricsIntegrationTest {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(KafkaClientMetricsIntegrationTest.class);
+
     @Container
-    private KafkaContainer kafkaContainer = new KafkaContainer(DockerImageName.parse("confluentinc/cp-kafka:5.5.1"));
+    private final KafkaContainer kafkaContainer = new KafkaContainer(DockerImageName.parse("confluentinc/cp-kafka:5.5.1"));
+
+    private final ScheduledExecutorService defaultMetricsScheduler = Executors.newSingleThreadScheduledExecutor(new NamedThreadFactory("blocking-metrics"));
+
+    private final ScheduledExecutorService scheduledMetricsScheduler = Executors.newSingleThreadScheduledExecutor(new NamedThreadFactory("scheduled-metrics"));
+
+    @Test
+    public void measureConsumerBindingsTime() throws InterruptedException, ExecutionException {
+        int initialConsumersCount = 50;
+        int maxConsumersCount = 801;
+        int iterationMultiplier = 2;
+        for (int i = initialConsumersCount; i < maxConsumersCount; i = Math.min(i * iterationMultiplier, maxConsumersCount)) {
+            LOGGER.info("Starting test for {} consumers...", i);
+            ScheduledFuture<?> scheduledInfoTask = createScheduledConsumersBindings(i);
+            ScheduledFuture<?> defaultInfoTask = createBlockingConsumersBindings(i);
+            cancelSchedulersTasks(scheduledInfoTask, defaultInfoTask);
+            LOGGER.info("{} consumers TEST ENDED!", i);
+        }
+    }
 
     @Test
     void shouldManageProducerAndConsumerMetrics() {
@@ -70,8 +103,7 @@ class KafkaClientMetricsIntegrationTest {
         consumerConfigs.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG,
                 kafkaContainer.getBootstrapServers());
         consumerConfigs.put(ConsumerConfig.GROUP_ID_CONFIG, "test");
-        Consumer<String, String> consumer = new KafkaConsumer<>(
-                consumerConfigs, new StringDeserializer(), new StringDeserializer());
+        Consumer<String, String> consumer = getConsumer(consumerConfigs);
 
         KafkaClientMetrics consumerKafkaMetrics = new KafkaClientMetrics(consumer);
         consumerKafkaMetrics.bindTo(registry);
@@ -170,7 +202,72 @@ class KafkaClientMetricsIntegrationTest {
         assertThat(producer2MetricsAfterSend).isEqualTo(producer1MetricsAfterSend * 2);
     }
 
-    void printMeters(SimpleMeterRegistry registry) {
+    private static void printMeters(SimpleMeterRegistry registry) {
         registry.getMeters().forEach(meter -> out.println(meter.getId() + " => " + meter.measure()));
     }
+
+    @NotNull
+    private static KafkaConsumer<String, String> getConsumer(Properties consumerConfigs) {
+        return new KafkaConsumer<>(consumerConfigs, new StringDeserializer(), new StringDeserializer());
+    }
+
+    private static void cancelSchedulersTasks(ScheduledFuture<?> scheduledInfoTask, ScheduledFuture<?> defaultInfoTask) throws InterruptedException, ExecutionException {
+        LOGGER.info("Cancelling executors task...");
+        cancelTask(scheduledInfoTask);
+        cancelTask(defaultInfoTask);
+        LOGGER.info("Cancelling executors task complete!");
+    }
+
+    private static void cancelTask(ScheduledFuture<?> scheduledInfoTask) throws InterruptedException, ExecutionException {
+        try {
+            scheduledInfoTask.get(1, TimeUnit.SECONDS);
+        } catch (TimeoutException e) {
+        } finally {
+            scheduledInfoTask.cancel(true);
+        }
+    }
+
+    private ScheduledFuture<?> createBlockingConsumersBindings(int totalConsumers) {
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        Instant startTime = Instant.now();
+        AtomicInteger currentIteration = new AtomicInteger();
+        ScheduledFuture<?> scheduledFuture = defaultMetricsScheduler.scheduleAtFixedRate(() -> LOGGER.info("Processing iteration: {}, total default registry meters: {}", currentIteration.get(), registry.getMeters().size()), 1, 10, TimeUnit.SECONDS);
+        for (int i = 0; i < totalConsumers; i++) {
+            KafkaClientMetrics consumerKafkaMetrics = createBlockingConsumerMetrics();
+            consumerKafkaMetrics.bindTo(registry);
+            currentIteration.incrementAndGet();
+        }
+        LOGGER.info("Blocking: Total time taken per {} consumers: {}", totalConsumers, Duration.between(startTime, Instant.now()));
+        return scheduledFuture;
+    }
+
+    private ScheduledFuture<?> createScheduledConsumersBindings(int totalConsumers) {
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        Instant startTime = Instant.now();
+        AtomicInteger currentIteration = new AtomicInteger();
+        ScheduledFuture<?> scheduledFuture = scheduledMetricsScheduler.scheduleAtFixedRate(() -> LOGGER.info("Processing iteration: {}, total scheduled registry meters: {}", currentIteration.get(), registry.getMeters().size()), 1, 10, TimeUnit.SECONDS);
+        for (int i = 0; i < totalConsumers; i++) {
+            ScheduledCheckingKafkaMetrics consumerKafkaMetrics = createScheduledConsumerMetrics();
+            consumerKafkaMetrics.bindTo(registry);
+            currentIteration.incrementAndGet();
+        }
+        LOGGER.info("Scheduled: Total time taken per {} consumers: {}", totalConsumers, Duration.between(startTime, Instant.now()));
+        return scheduledFuture;
+    }
+
+    private KafkaClientMetrics createBlockingConsumerMetrics() {
+        return new KafkaClientMetrics(getConsumer(getConsumerProperties()));
+    }
+
+    private ScheduledCheckingKafkaMetrics createScheduledConsumerMetrics() {
+        return new ScheduledCheckingKafkaMetrics(getConsumer(getConsumerProperties()));
+    }
+
+    private Properties getConsumerProperties() {
+        Properties consumerConfigs = new Properties();
+        consumerConfigs.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaContainer.getBootstrapServers());
+        consumerConfigs.put(ConsumerConfig.GROUP_ID_CONFIG, "test");
+        return consumerConfigs;
+    }
+
 }

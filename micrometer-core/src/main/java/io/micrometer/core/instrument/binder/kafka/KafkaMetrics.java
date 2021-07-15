@@ -15,6 +15,21 @@
  */
 package io.micrometer.core.instrument.binder.kafka;
 
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
+import java.util.function.ToDoubleFunction;
+
 import io.micrometer.core.annotation.Incubating;
 import io.micrometer.core.instrument.FunctionCounter;
 import io.micrometer.core.instrument.Gauge;
@@ -22,19 +37,8 @@ import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tag;
 import io.micrometer.core.instrument.binder.MeterBinder;
-import io.micrometer.core.instrument.util.NamedThreadFactory;
 import io.micrometer.core.lang.NonNullApi;
 import io.micrometer.core.lang.NonNullFields;
-
-import java.time.Duration;
-import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
-import java.util.function.Supplier;
-import java.util.function.ToDoubleFunction;
-
 import io.micrometer.core.lang.Nullable;
 import io.micrometer.core.util.internal.logging.InternalLogger;
 import io.micrometer.core.util.internal.logging.InternalLoggerFactory;
@@ -71,10 +75,14 @@ class KafkaMetrics implements MeterBinder, AutoCloseable {
     private final Supplier<Map<MetricName, ? extends Metric>> metricsSupplier;
     private final Iterable<Tag> extraTags;
     private final Duration refreshInterval;
-    private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(new NamedThreadFactory("micrometer-kafka-metrics"));
+
+    // Changed to common thread pool instead of creating a new one per each KafkaMetrics instance
+    private final ScheduledExecutorService scheduler = ExecutorsService.getScheduler();
+    // This is to hold all running tasks to clean them up on close
+    private final List<ScheduledFuture<?>> scheduledTasks = new CopyOnWriteArrayList<>();
 
     @Nullable
-    private Iterable<Tag> commonTags;
+    Iterable<Tag> commonTags;
 
     /**
      * Keeps track of current set of metrics.
@@ -109,10 +117,10 @@ class KafkaMetrics implements MeterBinder, AutoCloseable {
         commonTags = getCommonTags(registry);
         prepareToBindMetrics(registry);
         checkAndBindMetrics(registry);
-        scheduler.scheduleAtFixedRate(() -> checkAndBindMetrics(registry), getRefreshIntervalInMillis(), getRefreshIntervalInMillis(), TimeUnit.MILLISECONDS);
+        scheduledTasks.add(scheduler.scheduleAtFixedRate(() -> checkAndBindMetrics(registry), getRefreshIntervalInMillis(), getRefreshIntervalInMillis(), TimeUnit.MILLISECONDS));
     }
 
-    private Iterable<Tag> getCommonTags(MeterRegistry registry) {
+    Iterable<Tag> getCommonTags(MeterRegistry registry) {
         // FIXME hack until we have proper API to retrieve common tags
         Meter.Id dummyId = Meter.builder("delete.this", Meter.Type.OTHER, Collections.emptyList()).register(registry).getId();
         registry.remove(dummyId);
@@ -257,8 +265,7 @@ class KafkaMetrics implements MeterBinder, AutoCloseable {
 
     @Override
     public void close() {
-        this.scheduler.shutdownNow();
-
+        scheduledTasks.forEach(task -> task.cancel(true));
         for (Meter meter : registeredMeters) {
             registry.remove(meter);
         }
