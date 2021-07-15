@@ -33,6 +33,7 @@ import org.slf4j.Marker;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import static java.util.Collections.emptyList;
 
@@ -130,42 +131,17 @@ public class LogbackMetrics implements MeterBinder, AutoCloseable {
 @NonNullApi
 @NonNullFields
 class MetricsTurboFilter extends TurboFilter {
-    private final Counter errorCounter;
-    private final Counter warnCounter;
-    private final Counter infoCounter;
-    private final Counter debugCounter;
-    private final Counter traceCounter;
+    private final MeterRegistry registry;
+    private final Iterable<Tag> tags;
+    private final Map<String, Counter> errorCounters = new ConcurrentHashMap<>();
+    private final Map<String, Counter> warnCounters = new ConcurrentHashMap<>();
+    private final Map<String, Counter> infoCounters = new ConcurrentHashMap<>();
+    private final Map<String, Counter> debugCounters = new ConcurrentHashMap<>();
+    private final Map<String, Counter> traceCounters = new ConcurrentHashMap<>();
 
     MetricsTurboFilter(MeterRegistry registry, Iterable<Tag> tags) {
-        errorCounter = Counter.builder("logback.events")
-                .tags(tags).tags("level", "error")
-                .description("Number of error level events that made it to the logs")
-                .baseUnit(BaseUnits.EVENTS)
-                .register(registry);
-
-        warnCounter = Counter.builder("logback.events")
-                .tags(tags).tags("level", "warn")
-                .description("Number of warn level events that made it to the logs")
-                .baseUnit(BaseUnits.EVENTS)
-                .register(registry);
-
-        infoCounter = Counter.builder("logback.events")
-                .tags(tags).tags("level", "info")
-                .description("Number of info level events that made it to the logs")
-                .baseUnit(BaseUnits.EVENTS)
-                .register(registry);
-
-        debugCounter = Counter.builder("logback.events")
-                .tags(tags).tags("level", "debug")
-                .description("Number of debug level events that made it to the logs")
-                .baseUnit(BaseUnits.EVENTS)
-                .register(registry);
-
-        traceCounter = Counter.builder("logback.events")
-                .tags(tags).tags("level", "trace")
-                .description("Number of trace level events that made it to the logs")
-                .baseUnit(BaseUnits.EVENTS)
-                .register(registry);
+        this.registry = registry;
+        this.tags = tags;
     }
 
     @Override
@@ -182,27 +158,98 @@ class MetricsTurboFilter extends TurboFilter {
             return FilterReply.NEUTRAL;
         }
 
+        String loggerName = logger.getName();
+
         // cannot use logger.isEnabledFor(level), as it would cause a StackOverflowError by calling this filter again!
         if (level.isGreaterOrEqual(logger.getEffectiveLevel())) {
             switch (level.toInt()) {
                 case Level.ERROR_INT:
-                    errorCounter.increment();
+                    getOrCreateErrorCounter(loggerName).increment();
                     break;
                 case Level.WARN_INT:
-                    warnCounter.increment();
+                    getOrCreateWarnCounter(loggerName).increment();
                     break;
                 case Level.INFO_INT:
-                    infoCounter.increment();
+                    getOrCreateInfoCounter(loggerName).increment();
                     break;
                 case Level.DEBUG_INT:
-                    debugCounter.increment();
+                    getOrCreateDebugCounter(loggerName).increment();
                     break;
                 case Level.TRACE_INT:
-                    traceCounter.increment();
+                    getOrCreateTraceCounter(loggerName).increment();
                     break;
             }
         }
 
         return FilterReply.NEUTRAL;
+    }
+
+    private Counter getOrCreateErrorCounter(String name) {
+        return errorCounters.computeIfAbsent(name, this::createErrorCounter);
+    }
+
+    private Counter getOrCreateWarnCounter(String loggerName) {
+        return warnCounters.computeIfAbsent(loggerName, this::createWarnCounter);
+    }
+
+    private Counter getOrCreateInfoCounter(String loggerName) {
+        return infoCounters.computeIfAbsent(loggerName, this::createInfoCounter);
+    }
+
+    private Counter getOrCreateDebugCounter(String loggerName) {
+        return debugCounters.computeIfAbsent(loggerName, this::createDebugCounter);
+    }
+
+    private Counter getOrCreateTraceCounter(String name) {
+        return traceCounters.computeIfAbsent(name, this::createTraceCounter);
+    }
+
+    private Counter createErrorCounter(String loggerName) {
+        return Counter.builder("logback.events")
+                .tags(tags)
+                .tags("level", "error")
+                .tags("loggerName", loggerName)
+                .baseUnit(BaseUnits.EVENTS)
+                .register(registry);
+    }
+
+    private Counter createWarnCounter(String loggerName) {
+        return Counter.builder("logback.events")
+                .tags(tags)
+                .tags("level", "warn")
+                .tags("loggerName", loggerName)
+                .description("Number of warn level events that made it to the logs")
+                .baseUnit(BaseUnits.EVENTS)
+                .register(registry);
+    }
+
+    private Counter createInfoCounter(String loggerName) {
+        return Counter.builder("logback.events")
+                .tags(tags)
+                .tags("level", "info")
+                .tags("loggerName", loggerName)
+                .description("Number of info level events that made it to the logs")
+                .baseUnit(BaseUnits.EVENTS)
+                .register(registry);
+    }
+
+    private Counter createDebugCounter(String loggerName) {
+        return Counter.builder("logback.events")
+                .tags(tags)
+                .tags("level", "debug")
+                .tags("loggerName", loggerName)
+                .description("Number of debug level events that made it to the logs")
+                .baseUnit(BaseUnits.EVENTS)
+                .register(registry);
+    }
+
+    private Counter createTraceCounter(String loggerName) {
+        return Counter.builder("logback.events")
+                .tags(tags)
+                .tags("level", "trace")
+                .tags("loggerName", loggerName)
+                .description("Number of trace level events that made it to the logs")
+                .baseUnit(BaseUnits.EVENTS)
+                .register(registry);
     }
 }

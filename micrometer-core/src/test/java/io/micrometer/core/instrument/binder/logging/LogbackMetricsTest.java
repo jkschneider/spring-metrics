@@ -25,6 +25,7 @@ import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.MockClock;
 import io.micrometer.core.instrument.cumulative.CumulativeCounter;
+import io.micrometer.core.instrument.search.MeterNotFoundException;
 import io.micrometer.core.instrument.simple.SimpleConfig;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.micrometer.core.lang.NonNullApi;
@@ -36,6 +37,7 @@ import org.slf4j.LoggerFactory;
 
 import static java.util.Collections.emptyList;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class LogbackMetricsTest {
     private MeterRegistry registry = new SimpleMeterRegistry(SimpleConfig.DEFAULT, new MockClock());
@@ -56,25 +58,40 @@ class LogbackMetricsTest {
     }
 
     @Test
-    void logbackLevelMetrics() {
-        assertThat(registry.get("logback.events").counter().count()).isEqualTo(0.0);
+    void logbackLoggerName() {
+        Logger fooLogger = (Logger) LoggerFactory.getLogger("foo");
+        Logger barLogger = (Logger) LoggerFactory.getLogger("bar");
 
+        fooLogger.error("error");
+        fooLogger.error("error");
+        barLogger.error("error");
+        barLogger.error("error");
+        barLogger.error("error");
+
+        assertThat(registry.get("logback.events").tags("level", "error").tag("loggerName", "foo").counter().count()).isEqualTo(2.0);
+        assertThat(registry.get("logback.events").tags("level", "error").tag("loggerName", "bar").counter().count()).isEqualTo(3.0);
+    }
+
+    @Test
+    void logbackLevelMetrics() {
         logger.setLevel(Level.INFO);
 
         logger.warn("warn");
         logger.error("error");
         logger.debug("debug"); // shouldn't record a metric
 
+        assertThat(registry.get("logback.events").tags("level", "error").counter().count()).isEqualTo(1.0);
         assertThat(registry.get("logback.events").tags("level", "warn").counter().count()).isEqualTo(1.0);
-        assertThat(registry.get("logback.events").tags("level", "debug").counter().count()).isEqualTo(0.0);
+        assertThatThrownBy(() -> registry.get("logback.events").tags("level", "debug").counter()).isInstanceOf(MeterNotFoundException.class);
     }
 
     @Issue("#183")
     @Test
     void isLevelEnabledDoesntContributeToCounts() {
+        logger.error("error");
+        assertThat(registry.get("logback.events").tags("level", "error").counter().count()).isEqualTo(1.0);
         logger.isErrorEnabled();
-
-        assertThat(registry.get("logback.events").tags("level", "error").counter().count()).isEqualTo(0.0);
+        assertThat(registry.get("logback.events").tags("level", "error").counter().count()).isEqualTo(1.0);
     }
 
     @Issue("#411")
@@ -118,8 +135,8 @@ class LogbackMetricsTest {
     @Issue("#2270")
     @Test
     void resetIgnoreMetricsWhenRunnableThrows() {
-        Counter infoLogCounter = registry.get("logback.events").tag("level", "info").counter();
         logger.info("hi");
+        Counter infoLogCounter = registry.get("logback.events").tag("level", "info").counter();
         assertThat(infoLogCounter.count()).isEqualTo(1);
         try {
             LogbackMetrics.ignoreMetrics(() -> {
