@@ -191,7 +191,7 @@ public final class Tags implements Iterable<Tag> {
      * @param otherTags the second set of tags
      * @return the merged tags
      */
-    public static Tags concat(@Nullable Iterable<? extends Tag> tags, @Nullable Iterable<Tag> otherTags) {
+    public static Tags concat(@Nullable Iterable<? extends Tag> tags, @Nullable Iterable<? extends Tag> otherTags) {
         return Tags.of(tags).and(otherTags);
     }
 
