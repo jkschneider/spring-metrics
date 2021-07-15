@@ -1,5 +1,5 @@
 /**
- * Copyright 2017 VMware, Inc.
+ * Copyright 2021 VMware, Inc.
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,27 +18,27 @@ package io.micrometer.core.instrument.distribution;
 import io.micrometer.core.instrument.Clock;
 
 /**
- * An implementation of a decaying maximum for a distribution based on a configurable ring buffer.
+ * An implementation of a decaying minimum for a distribution based on a configurable ring buffer.
  *
  * @author Jon Schneider
  */
-public class TimeWindowMax extends AbstractTimeWindow {
+public class TimeWindowMin extends AbstractTimeWindow {
     @SuppressWarnings("ConstantConditions")
-    public TimeWindowMax(Clock clock, DistributionStatisticConfig config) {
-        this(clock, config.getExpiry().toMillis(), config.getBufferLength());
+    public TimeWindowMin(Clock clock, DistributionStatisticConfig config) {
+        super(clock, config.getExpiry().toMillis(), config.getBufferLength());
     }
 
-    public TimeWindowMax(Clock clock, long rotateFrequencyMillis, int bufferLength) {
+    public TimeWindowMin(Clock clock, long rotateFrequencyMillis, int bufferLength) {
         super(clock, rotateFrequencyMillis, bufferLength);
     }
 
     @Override
     protected long initialValue() {
-        return 0;
+        return Long.MAX_VALUE;
     }
 
     @Override
     protected boolean shouldUpdate(long cached, long sample) {
-        return cached < sample;
+        return cached > sample;
     }
 }
