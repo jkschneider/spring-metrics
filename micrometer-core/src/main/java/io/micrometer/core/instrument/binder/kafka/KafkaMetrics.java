@@ -34,6 +34,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 import java.util.function.ToDoubleFunction;
+import java.util.stream.Collectors;
 
 import io.micrometer.core.lang.Nullable;
 import io.micrometer.core.util.internal.logging.InternalLogger;
@@ -158,6 +159,10 @@ class KafkaMetrics implements MeterBinder, AutoCloseable {
 
         if (!currentMeters.equals(metrics.keySet())) {
             currentMeters = new HashSet<>(metrics.keySet());
+
+            Map<String, List<Meter>> registryMetersByNames = registry.getMeters().stream()
+                    .collect(Collectors.groupingBy(meter -> meter.getId().getName()));
+
             metrics.forEach((name, metric) -> {
                 // Filter out non-numeric values
                 // Filter out metrics from groups that include metadata
@@ -172,12 +177,15 @@ class KafkaMetrics implements MeterBinder, AutoCloseable {
                 // Kafka has metrics with lower number of tags (e.g. with/without topic or partition tag)
                 // Remove meters with lower number of tags
                 boolean hasLessTags = false;
-                for (Meter other : registry.find(meterName).meters()) {
+                List<Meter> metersForName = registryMetersByNames.getOrDefault(meterName, emptyList());
+                List<Meter> metersWithLessTags = new ArrayList<>(metersForName.size());
+                for (Meter other : metersForName) {
                     List<Tag> tags = other.getId().getTags();
                     List<Tag> meterTagsWithCommonTags = meterTags(metric, true);
                     if (tags.size() < meterTagsWithCommonTags.size()) {
                         registry.remove(other);
                         registeredMeters.remove(other);
+                        metersWithLessTags.add(other);
                     }
                     // Check if already exists
                     else if (tags.size() == meterTagsWithCommonTags.size())
@@ -186,9 +194,14 @@ class KafkaMetrics implements MeterBinder, AutoCloseable {
                     else hasLessTags = true;
                 }
                 if (hasLessTags) return;
+
+                metersForName.removeAll(metersWithLessTags);
+
                 List<Tag> tags = meterTags(metric);
                 try {
-                    bindMeter(registry, metric, meterName, tags);
+                    Meter meter = bindMeter(registry, metric, meterName, tags);
+                    List<Meter> meters = registryMetersByNames.computeIfAbsent(meterName, k -> new ArrayList<>());
+                    meters.add(meter);
                 }
                 catch (Exception ex) {
                     String message = ex.getMessage();
@@ -204,9 +217,10 @@ class KafkaMetrics implements MeterBinder, AutoCloseable {
         }
     }
 
-    private void bindMeter(MeterRegistry registry, Metric metric, String name, Iterable<Tag> tags) {
+    private Meter bindMeter(MeterRegistry registry, Metric metric, String name, Iterable<Tag> tags) {
         Meter meter = registerMeter(registry, metric, name, tags);
         registeredMeters.add(meter);
+        return meter;
     }
 
     private Meter registerMeter(MeterRegistry registry, Metric metric, String name, Iterable<Tag> tags) {
