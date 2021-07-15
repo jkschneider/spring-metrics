@@ -19,6 +19,7 @@ import io.micrometer.core.instrument.*;
 import io.micrometer.core.instrument.step.StepMeterRegistry;
 import io.micrometer.core.instrument.util.MeterPartition;
 import io.micrometer.core.instrument.util.NamedThreadFactory;
+import io.micrometer.core.instrument.util.StringEscapeUtils;
 import io.micrometer.core.ipc.http.HttpSender;
 import io.micrometer.core.ipc.http.HttpUrlConnectionSender;
 import io.micrometer.core.lang.Nullable;
@@ -26,13 +27,17 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.net.URLEncoder;
+import java.time.Instant;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static io.micrometer.core.instrument.util.StringEscapeUtils.escapeJson;
@@ -53,6 +58,7 @@ public class DatadogMeterRegistry extends StepMeterRegistry {
      * Metric names for which we have posted metadata concerning type and base unit
      */
     private final Set<String> verifiedMetadata = ConcurrentHashMap.newKeySet();
+    private final ConcurrentLinkedQueue<DatadogEvent> eventQueue;
 
     /**
      * @param config Configuration options for the registry that are describable as properties.
@@ -82,6 +88,7 @@ public class DatadogMeterRegistry extends StepMeterRegistry {
 
         this.config = config;
         this.httpClient = httpClient;
+        this.eventQueue = new ConcurrentLinkedQueue<>();
 
         start(threadFactory);
     }
@@ -98,6 +105,11 @@ public class DatadogMeterRegistry extends StepMeterRegistry {
 
     @Override
     protected void publish() {
+        publishMetrics();
+        publishEvents();
+    }
+
+    private void publishMetrics() {
         Map<String, DatadogMetricMetadata> metadataToSend = new HashMap<>();
 
         String datadogEndpoint = config.uri() + "/api/v1/series?api_key=" + config.apiKey();
@@ -330,5 +342,150 @@ public class DatadogMeterRegistry extends StepMeterRegistry {
         public DatadogMeterRegistry build() {
             return new DatadogMeterRegistry(config, clock, threadFactory, httpClient);
         }
+    }
+
+    private void publishEvents() {
+        String uri = config.uri() + "/api/v1/series?api_key=" + config.apiKey();
+        try {
+            DatadogEvent event = eventQueue.poll();
+            while (event != null) {
+                publishEvent(event, uri);
+                event = eventQueue.poll();
+            }
+        } catch (Throwable e) {
+            logger.error("Unable to publish event to datadog", e);
+        }
+
+    }
+
+    private void publishEvent(DatadogEvent event, String url) throws Throwable {
+        /*
+            {
+              "aggregation_key": "string",
+              "alert_type": "info",
+              "date_happened": "integer",
+              "device_name": [],
+              "host": "string",
+              "priority": "normal",
+              "related_event_id": "integer",
+              "source_type_name": "string",
+              "tags": [
+                "environment:test"
+              ],
+              "text": "Oh boy!",
+              "title": "Did you hear the news today?"
+            }
+         */
+        String body = encodeEvent(event);
+
+        logger.trace("sending event to datadog:{}{}", System.lineSeparator(), body);
+
+        httpClient.post(url)
+                .withJsonContent(body)
+                .send()
+                .onSuccess(response -> logger.debug("successfully sent event to datadog"))
+                .onError(response -> logger.error("failed to send event to datadog: {}", response.body()));
+    }
+
+    private String encodeEvent(DatadogEvent event) {
+        StringBuilder body = new StringBuilder();
+        body.append("{");
+        {
+            body.append("\"title\": ");
+            body.append(escapeJson(event.getTitle()));
+            body.append(", \"text\": ");
+            body.append(escapeJson(event.getText()));
+
+            if (event.getAggregationKey() != null) {
+                body.append(", \"aggregation_key\": ");
+                body.append(escapeJson(event.getAggregationKey()));
+            }
+            if (event.getDateHappened() != null) {
+                body.append(", \"date_happened\": ");
+                body.append(event.getDateHappened().getEpochSecond());
+            }
+            if (event.getAlertType() != null) {
+                body.append(", \"alert_type\": ");
+                body.append(escapeJson(event.getAlertType()));
+            }
+            if (event.getDeviceName() != null) {
+                body.append(", \"device_name\": [");
+                body.append(event.getDeviceName().stream()
+                        .map(StringEscapeUtils::escapeJson)
+                        .collect(joining(",")));
+                body.append("]");
+            }
+            if (event.getHost() != null) {
+                body.append(", \"alert_type\": ");
+                body.append(escapeJson(event.getAlertType()));
+            }
+            if (event.getPriority() != null) {
+                body.append(", \"priority\": ");
+                body.append(escapeJson(event.getPriority()));
+            }
+            if (event.getRelatedEventId() != null) {
+                body.append(", \"related_event_id\": ");
+                body.append(event.getRelatedEventId());
+            }
+
+            if (event.getSourceTypeName() != null) {
+                body.append(", \"source_type_name\": ");
+                body.append(escapeJson(event.getSourceTypeName()));
+            }
+            if (event.getTags() != null) {
+                body.append(", \"tags\": [");
+                body.append(event.getTags().stream()
+                        .map(StringEscapeUtils::escapeJson)
+                        .collect(joining(",")));
+                body.append("]");
+            }
+        }
+        body.append("}");
+        return body.toString();
+    }
+    public class EventPublisher {
+        private final String aggregationKey;
+        private final List<Tag> tags;
+        private final List<String> deviceName;
+
+        public EventPublisher(String aggregationKey, List<String> deviceName, List<Tag> tags) {
+            this.aggregationKey = aggregationKey;
+            this.deviceName = deviceName;
+            this.tags = tags;
+        }
+
+        public void publish(String title, String text) {
+            publish(title, text, null, null, null, null);
+        }
+
+        public void publish(String title, String text, Instant dateHappened, String alertType, String priority, Long relatedEventId) {
+            if (!config.enabled()) return;
+            DatadogEvent event = new DatadogEvent();
+            event.setAlertType(alertType);
+            event.setTitle(title);
+            event.setText(text);
+            event.setHost(config.hostTag());
+            event.setDateHappened(dateHappened);
+            event.setPriority(priority);
+            event.setRelatedEventId(relatedEventId);
+            event.setTags(tags.stream()
+                    .map(t -> t.getKey() + ":" + t.getValue()).collect(
+                    Collectors.toList()));
+            event.setAggregationKey(aggregationKey);
+            event.setSourceTypeName("SYSTEM");
+            event.setDeviceName(deviceName);
+            if (!eventQueue.offer(event)) logger.warn("Datadog event publish queue overflowed");
+        }
+    }
+
+    public EventPublisher events(String aggregationKey, List<String> deviceName, List<Tag> tags) {
+        return new EventPublisher(aggregationKey, deviceName, tags);
+    }
+    public EventPublisher events(String aggregationKey) {
+        return new EventPublisher(aggregationKey, null, null);
+    }
+
+    public EventPublisher events() {
+        return new EventPublisher(null, null, null);
     }
 }
