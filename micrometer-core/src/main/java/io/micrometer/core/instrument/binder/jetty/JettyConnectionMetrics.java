@@ -149,7 +149,9 @@ public class JettyConnectionMetrics extends AbstractLifeCycle implements Connect
     public static void addToAllConnectors(Server server, MeterRegistry registry, Iterable<Tag> tags) {
         for (Connector connector : server.getConnectors()) {
             if (connector != null) {
-                connector.addBean(new JettyConnectionMetrics(registry, tags));
+                String name = connector.getName();
+                Tags connectorNameTag = Tags.of("connector.name", name != null ? name : "unnamed");
+                connector.addBean(new JettyConnectionMetrics(registry, connectorNameTag.and(tags)));
             }
         }
     }
