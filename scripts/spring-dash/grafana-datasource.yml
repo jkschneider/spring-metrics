@@ -4,4 +4,4 @@ datasources:
 - name: prometheus
   type: prometheus
   access: direct
-  url: http://10.200.10.1:9090
+  url: https://10.200.10.1:9090
