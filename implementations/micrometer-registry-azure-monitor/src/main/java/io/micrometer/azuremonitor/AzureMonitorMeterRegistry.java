@@ -113,13 +113,10 @@ public class AzureMonitorMeterRegistry extends StepMeterRegistry {
     }
 
     private Stream<MetricTelemetry> trackLongTaskTimer(LongTaskTimer timer) {
-        MetricTelemetry active = createMetricTelemetry(timer, "active");
-        active.setValue(timer.activeTasks());
-
-        MetricTelemetry duration = createMetricTelemetry(timer, "duration");
-        duration.setValue(timer.duration(getBaseTimeUnit()));
-
-        return Stream.of(active, duration);
+        MetricTelemetry mt = createMetricTelemetry(timer, null);
+        mt.setValue(timer.duration(getBaseTimeUnit()));
+        mt.setCount(castCountToInt(timer.activeTasks()));
+        return Stream.of(mt);
     }
 
     // VisibleForTesting
