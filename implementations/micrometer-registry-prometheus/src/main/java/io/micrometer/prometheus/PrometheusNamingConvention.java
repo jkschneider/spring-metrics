@@ -67,7 +67,9 @@ public class PrometheusNamingConvention implements NamingConvention {
                 break;
             case TIMER:
             case LONG_TASK_TIMER:
-                if (conventionName.endsWith(timerSuffix)) {
+                if (conventionName.endsWith(timerSuffix + "_seconds")) {
+                    // do nothing, metric name is properly formatted
+                } else if (conventionName.endsWith(timerSuffix)) {
                     conventionName += "_seconds";
                 } else if (!conventionName.endsWith("_seconds"))
                     conventionName += timerSuffix + "_seconds";
