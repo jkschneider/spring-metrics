@@ -17,19 +17,19 @@ package io.micrometer.core.instrument.binder.httpcomponents;
 
 import io.micrometer.core.instrument.Tag;
 import org.apache.http.conn.routing.HttpRoute;
-import org.apache.http.impl.conn.PoolingHttpClientConnectionManager;
+import org.apache.http.impl.nio.conn.PoolingNHttpClientConnectionManager;
 
 import java.util.Collection;
 
 /**
- * Collects total metrics including {@link HttpRoute} state for synchronous HTTP clients {@link PoolingHttpClientConnectionManager}
+ * Collects total metrics including {@link HttpRoute} state for asynchronous HTTP clients {@link PoolingNHttpClientConnectionManager}
  * <p>
  * It monitors the overall and per route connection pool state.
  *
  * @author Mikhail Yakimchenko (mikhailyakimchenko@gmail.com)
  * @since 1.5.0
  */
-public class PoolingHttpClientConnectionManagerMetricsBinder extends AbstractPoolingHttpClientConnectionManagerMetricsBinder<PoolingHttpClientConnectionManager> {
+public class PoolingNHttpClientConnectionManagerMetricsBinder extends AbstractPoolingHttpClientConnectionManagerMetricsBinder<PoolingNHttpClientConnectionManager> {
 
     /**
      * Creates a metrics binder for the given http client connection manager.
@@ -39,7 +39,7 @@ public class PoolingHttpClientConnectionManagerMetricsBinder extends AbstractPoo
      * @param tags              Tags to apply to all recorded metrics. Must be an even number
      *                          of arguments representing key/value pairs of tags.
      */
-    public PoolingHttpClientConnectionManagerMetricsBinder(PoolingHttpClientConnectionManager connectionManager, String name, String... tags) {
+    public PoolingNHttpClientConnectionManagerMetricsBinder(PoolingNHttpClientConnectionManager connectionManager, String name, String... tags) {
         super(connectionManager, name, tags);
     }
 
@@ -50,12 +50,12 @@ public class PoolingHttpClientConnectionManagerMetricsBinder extends AbstractPoo
      * @param name              Name of the connection pool control. Will be added as tag with the key "httpclient".
      * @param tags              Tags to apply to all recorded metrics.
      */
-    public PoolingHttpClientConnectionManagerMetricsBinder(PoolingHttpClientConnectionManager connectionManager, String name, Iterable<Tag> tags) {
+    public PoolingNHttpClientConnectionManagerMetricsBinder(PoolingNHttpClientConnectionManager connectionManager, String name, Iterable<Tag> tags) {
         super(connectionManager, name, tags);
     }
 
     @Override
-    protected Collection<HttpRoute> getRoutes(PoolingHttpClientConnectionManager connectionManager) {
+    protected Collection<HttpRoute> getRoutes(PoolingNHttpClientConnectionManager connectionManager) {
         return connectionManager.getRoutes();
     }
 }

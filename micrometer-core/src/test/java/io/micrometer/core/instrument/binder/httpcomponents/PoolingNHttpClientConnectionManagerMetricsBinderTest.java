@@ -21,7 +21,7 @@ import io.micrometer.core.instrument.simple.SimpleConfig;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.apache.http.HttpHost;
 import org.apache.http.conn.routing.HttpRoute;
-import org.apache.http.impl.conn.PoolingHttpClientConnectionManager;
+import org.apache.http.impl.nio.conn.PoolingNHttpClientConnectionManager;
 import org.apache.http.pool.PoolStats;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -35,14 +35,14 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 /**
- * Unit tests for {@link PoolingHttpClientConnectionManagerMetricsBinder}.
+ * Unit tests for {@link PoolingNHttpClientConnectionManagerMetricsBinder}.
  *
  * @author Mikhail Yakimchenko (mikhailyakimchenko@gmail.com)
  */
-class PoolingHttpClientConnectionManagerMetricsBinderTest {
+class PoolingNHttpClientConnectionManagerMetricsBinderTest {
 
-    private PoolingHttpClientConnectionManager connectionManager;
-    private PoolingHttpClientConnectionManagerMetricsBinder binder;
+    private PoolingNHttpClientConnectionManager connectionManager;
+    private PoolingNHttpClientConnectionManagerMetricsBinder binder;
 
     private MeterRegistry registry = new SimpleMeterRegistry(SimpleConfig.DEFAULT, new MockClock());
     private HttpRoute route = new HttpRoute(new HttpHost("localhost"));
@@ -50,11 +50,11 @@ class PoolingHttpClientConnectionManagerMetricsBinderTest {
 
     @BeforeEach
     void setup() {
-        connectionManager = mock(PoolingHttpClientConnectionManager.class);
+        connectionManager = mock(PoolingNHttpClientConnectionManager.class);
         when(connectionManager.getRoutes()).thenReturn(Collections.singleton(route));
         when(connectionManager.getStats(route)).thenReturn(poolStats);
 
-        binder = new PoolingHttpClientConnectionManagerMetricsBinder(connectionManager, "test");
+        binder = new PoolingNHttpClientConnectionManagerMetricsBinder(connectionManager, "test");
         binder.bindTo(registry);
     }
 
