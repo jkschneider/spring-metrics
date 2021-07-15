@@ -18,6 +18,7 @@ package io.micrometer.core.instrument.composite;
 import io.micrometer.core.instrument.AbstractMeter;
 import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.noop.NoopMeter;
 import io.micrometer.core.lang.Nullable;
 
 import java.util.Collections;
@@ -64,7 +65,7 @@ abstract class AbstractCompositeMeter<T extends Meter> extends AbstractMeter imp
 
     public final void add(MeterRegistry registry) {
         final T newMeter = registerNewMeter(registry);
-        if (newMeter == null) {
+        if (newMeter == null || newMeter instanceof NoopMeter) {
             return;
         }
 
