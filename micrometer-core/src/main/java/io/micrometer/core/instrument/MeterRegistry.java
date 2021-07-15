@@ -826,6 +826,7 @@ public abstract class MeterRegistry {
          * @return This configuration instance.
          * @see io.micrometer.core.instrument.distribution.pause.NoPauseDetector
          * @see io.micrometer.core.instrument.distribution.pause.ClockDriftPauseDetector
+         * @see io.micrometer.core.instrument.distribution.pause.MemoryPoolThresholdPauseDetector
          */
         public Config pauseDetector(PauseDetector detector) {
             pauseDetector = detector;
