@@ -273,6 +273,14 @@ public interface Timer extends Meter, HistogramSupport {
             this.startTime = clock.monotonicTime();
         }
 
+        public Duration elapsed() {
+          return Duration.ofNanos(clock.monotonicTime() - startTime);
+        }
+
+        public long elapsed(TimeUnit unit) {
+          return unit.convert(clock.monotonicTime() - startTime, TimeUnit.NANOSECONDS);
+        }
+
         /**
          * Records the duration of the operation.
          *

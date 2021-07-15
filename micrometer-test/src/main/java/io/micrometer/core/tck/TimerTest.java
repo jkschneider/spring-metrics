@@ -189,6 +189,28 @@ interface TimerTest {
     }
 
     @Test
+    @DisplayName("elapsed with stateful Sample instance")
+    default void elapsedWithSample(MeterRegistry registry) {
+        Timer timer = registry.timer("myTimer");
+        Timer.Sample sample = Timer.start(registry);
+
+        clock(registry).add(10, TimeUnit.NANOSECONDS);
+        assertAll(() -> assertEquals(Duration.ofNanos(10), sample.elapsed()),
+            () -> assertEquals(10, sample.elapsed(TimeUnit.NANOSECONDS)),
+            () -> assertEquals(0, sample.elapsed(TimeUnit.MILLISECONDS)));
+        clock(registry).add(500, TimeUnit.MILLISECONDS);
+        Duration expectedDuration = Duration.ofNanos(10).plusMillis(500);
+        assertAll(() -> assertEquals(expectedDuration, sample.elapsed()),
+            () -> assertEquals(expectedDuration.toNanos(), sample.elapsed(TimeUnit.NANOSECONDS)),
+            () -> assertEquals(expectedDuration.toMillis(), sample.elapsed(TimeUnit.MILLISECONDS)));
+        sample.stop(timer);
+        clock(registry).add(step());
+
+        assertAll(() -> assertEquals(1L, timer.count()),
+                () -> assertEquals(expectedDuration.toNanos(), timer.totalTime(TimeUnit.NANOSECONDS), 1.0e-12));
+    }
+
+    @Test
     default void recordMax(MeterRegistry registry) {
         Timer timer = registry.timer("my.timer");
         timer.record(10, TimeUnit.MILLISECONDS);
