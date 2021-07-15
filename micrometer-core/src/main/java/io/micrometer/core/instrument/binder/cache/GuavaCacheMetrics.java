@@ -21,8 +21,12 @@ import com.google.common.cache.LoadingCache;
 import io.micrometer.core.instrument.*;
 import io.micrometer.core.lang.NonNullApi;
 import io.micrometer.core.lang.NonNullFields;
+import io.micrometer.core.lang.Nullable;
 
+import java.lang.ref.WeakReference;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
+import java.util.function.ToLongFunction;
 
 /**
  * @author Jon Schneider
@@ -30,7 +34,7 @@ import java.util.concurrent.TimeUnit;
 @NonNullApi
 @NonNullFields
 public class GuavaCacheMetrics extends CacheMeterBinder {
-    private final Cache<?, ?> cache;
+    private final WeakReference<Cache<?, ?>> cache;
 
     /**
      * Record metrics on a Guava cache. You must call {@link CacheBuilder#recordStats()} prior to building the cache
@@ -67,52 +71,71 @@ public class GuavaCacheMetrics extends CacheMeterBinder {
 
     public GuavaCacheMetrics(Cache<?, ?> cache, String cacheName, Iterable<Tag> tags) {
         super(cache, cacheName, tags);
-        this.cache = cache;
+        this.cache = new WeakReference<>(cache);
     }
 
     @Override
     protected Long size() {
-        return cache.size();
+        return getOrDefault(Cache::size, null);
     }
 
     @Override
     protected long hitCount() {
-        return cache.stats().hitCount();
+        return getOrDefault(c -> c.stats().hitCount(), 0L);
     }
 
     @Override
     protected Long missCount() {
-        return cache.stats().missCount();
+        return getOrDefault(c -> c.stats().missCount(), null);
     }
 
     @Override
     protected Long evictionCount() {
-        return cache.stats().evictionCount();
+        return getOrDefault(c -> c.stats().evictionCount(), null);
     }
 
     @Override
     protected long putCount() {
-        return cache.stats().loadCount();
+        return getOrDefault(c -> c.stats().loadCount(), 0L);
     }
 
     @Override
     protected void bindImplementationSpecificMetrics(MeterRegistry registry) {
-        if (cache instanceof LoadingCache) {
+        if (cache.get() instanceof LoadingCache) {
             // dividing these gives you a measure of load latency
-            TimeGauge.builder("cache.load.duration", cache, TimeUnit.NANOSECONDS, c -> c.stats().totalLoadTime())
+            TimeGauge.builder("cache.load.duration", cache.get(), TimeUnit.NANOSECONDS, c -> c.stats().totalLoadTime())
                     .tags(getTagsWithCacheName())
                     .description("The time the cache has spent loading new values")
                     .register(registry);
 
-            FunctionCounter.builder("cache.load", cache, c -> c.stats().loadSuccessCount())
+            FunctionCounter.builder("cache.load", cache.get(), c -> c.stats().loadSuccessCount())
                     .tags(getTagsWithCacheName()).tags("result", "success")
                     .description("The number of times cache lookup methods have successfully loaded a new value")
                     .register(registry);
 
-            FunctionCounter.builder("cache.load", cache, c -> c.stats().loadExceptionCount())
+            FunctionCounter.builder("cache.load", cache.get(), c -> c.stats().loadExceptionCount())
                     .tags(getTagsWithCacheName()).tags("result", "failure")
                     .description("The number of times cache lookup methods threw an exception while loading a new value")
                     .register(registry);
         }
+    }
+
+    @Nullable
+    private Long getOrDefault(Function<Cache<?, ?>, Long> function, @Nullable Long defaultValue) {
+        Cache<?, ?> ref = cache.get();
+        if (ref != null) {
+            return function.apply(ref);
+        }
+
+        return defaultValue;
+    }
+
+    private long getOrDefault(ToLongFunction<Cache<?, ?>> function, long defaultValue) {
+        Cache<?, ?> ref = cache.get();
+        if (ref != null) {
+            return function.applyAsLong(ref);
+        }
+
+        return defaultValue;
     }
 }

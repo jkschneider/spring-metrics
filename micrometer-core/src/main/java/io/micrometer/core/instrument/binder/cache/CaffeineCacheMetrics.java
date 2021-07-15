@@ -20,8 +20,12 @@ import com.github.benmanes.caffeine.cache.stats.CacheStats;
 import io.micrometer.core.instrument.*;
 import io.micrometer.core.lang.NonNullApi;
 import io.micrometer.core.lang.NonNullFields;
+import io.micrometer.core.lang.Nullable;
 
+import java.lang.ref.WeakReference;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
+import java.util.function.ToLongFunction;
 
 /**
  * Collect metrics from Caffeine's {@link com.github.benmanes.caffeine.cache.Cache}. {@link CaffeineStatsCounter} is an
@@ -40,7 +44,7 @@ import java.util.concurrent.TimeUnit;
 @NonNullApi
 @NonNullFields
 public class CaffeineCacheMetrics extends CacheMeterBinder {
-    private final Cache<?, ?> cache;
+    private final WeakReference<Cache<?, ?>> cache;
 
     /**
      * Creates a new {@link CaffeineCacheMetrics} instance.
@@ -52,7 +56,7 @@ public class CaffeineCacheMetrics extends CacheMeterBinder {
      */
     public CaffeineCacheMetrics(Cache<?, ?> cache, String cacheName, Iterable<Tag> tags) {
         super(cache, cacheName, tags);
-        this.cache = cache;
+        this.cache = new WeakReference<>(cache);
     }
 
     /**
@@ -121,55 +125,74 @@ public class CaffeineCacheMetrics extends CacheMeterBinder {
 
     @Override
     protected Long size() {
-        return cache.estimatedSize();
+        return getOrDefault(Cache::estimatedSize, null);
     }
 
     @Override
     protected long hitCount() {
-        return cache.stats().hitCount();
+        return getOrDefault(c -> c.stats().hitCount(), 0L);
     }
 
     @Override
     protected Long missCount() {
-        return cache.stats().missCount();
+        return getOrDefault(c -> c.stats().missCount(), null);
     }
 
     @Override
     protected Long evictionCount() {
-        return cache.stats().evictionCount();
+        return getOrDefault(c -> c.stats().evictionCount(), null);
     }
 
     @Override
     protected long putCount() {
-        return cache.stats().loadCount();
+        return getOrDefault(c -> c.stats().loadCount(), 0L);
     }
 
     @Override
     protected void bindImplementationSpecificMetrics(MeterRegistry registry) {
-        FunctionCounter.builder("cache.eviction.weight", cache, c -> c.stats().evictionWeight())
+        FunctionCounter.builder("cache.eviction.weight", cache.get(), c -> c.stats().evictionWeight())
                 .tags(getTagsWithCacheName())
                 .description("The sum of weights of evicted entries. This total does not include manual invalidations.")
                 .register(registry);
 
-        if (cache instanceof LoadingCache) {
+        if (cache.get() instanceof LoadingCache) {
             // dividing these gives you a measure of load latency
-            TimeGauge.builder("cache.load.duration", cache, TimeUnit.NANOSECONDS, c -> c.stats().totalLoadTime())
+            TimeGauge.builder("cache.load.duration", cache.get(), TimeUnit.NANOSECONDS, c -> c.stats().totalLoadTime())
                     .tags(getTagsWithCacheName())
                     .description("The time the cache has spent loading new values")
                     .register(registry);
 
-            FunctionCounter.builder("cache.load", cache, c -> c.stats().loadSuccessCount())
+            FunctionCounter.builder("cache.load", cache.get(), c -> c.stats().loadSuccessCount())
                     .tags(getTagsWithCacheName())
                     .tags("result", "success")
                     .description("The number of times cache lookup methods have successfully loaded a new value")
                     .register(registry);
 
-            FunctionCounter.builder("cache.load", cache, c -> c.stats().loadFailureCount())
+            FunctionCounter.builder("cache.load", cache.get(), c -> c.stats().loadFailureCount())
                     .tags(getTagsWithCacheName())
                     .tags("result", "failure")
                     .description("The number of times {@link Cache} lookup methods failed to load a new value, either " +
                             "because no value was found or an exception was thrown while loading")
                     .register(registry);
         }
+    }
+
+    @Nullable
+    private Long getOrDefault(Function<Cache<?, ?>, Long> function, @Nullable Long defaultValue) {
+        Cache<?, ?> ref = cache.get();
+        if (ref != null) {
+            return function.apply(ref);
+        }
+
+        return defaultValue;
+    }
+
+    private long getOrDefault(ToLongFunction<Cache<?, ?>> function, long defaultValue) {
+        Cache<?, ?> ref = cache.get();
+        if (ref != null) {
+            return function.applyAsLong(ref);
+        }
+
+        return defaultValue;
     }
 }
