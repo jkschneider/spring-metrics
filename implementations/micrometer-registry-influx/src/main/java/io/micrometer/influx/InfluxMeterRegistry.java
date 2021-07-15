@@ -15,9 +15,25 @@
  */
 package io.micrometer.influx;
 
-import io.micrometer.core.instrument.*;
+import io.micrometer.core.instrument.Clock;
+import io.micrometer.core.instrument.DistributionSummary;
+import io.micrometer.core.instrument.FunctionTimer;
+import io.micrometer.core.instrument.LongTaskTimer;
+import io.micrometer.core.instrument.Measurement;
+import io.micrometer.core.instrument.Meter;
+import io.micrometer.core.instrument.Timer;
+import io.micrometer.core.instrument.distribution.DistributionStatisticConfig;
+import io.micrometer.core.instrument.distribution.HistogramSupport;
+import io.micrometer.core.instrument.distribution.ValueAtPercentile;
+import io.micrometer.core.instrument.distribution.pause.PauseDetector;
+import io.micrometer.core.instrument.step.StepDistributionSummary;
 import io.micrometer.core.instrument.step.StepMeterRegistry;
-import io.micrometer.core.instrument.util.*;
+import io.micrometer.core.instrument.step.StepTimer;
+import io.micrometer.core.instrument.util.DoubleFormat;
+import io.micrometer.core.instrument.util.MeterPartition;
+import io.micrometer.core.instrument.util.NamedThreadFactory;
+import io.micrometer.core.instrument.util.StringUtils;
+import io.micrometer.core.instrument.util.TimeUtils;
 import io.micrometer.core.ipc.http.HttpSender;
 import io.micrometer.core.ipc.http.HttpUrlConnectionSender;
 import org.slf4j.Logger;
@@ -26,6 +42,7 @@ import org.slf4j.LoggerFactory;
 import java.util.ArrayList;
 import java.net.MalformedURLException;
 import java.net.URLEncoder;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
@@ -109,6 +126,18 @@ public class InfluxMeterRegistry extends StepMeterRegistry {
         } catch (Throwable e) {
             logger.error("unable to create database '{}'", config.db(), e);
         }
+    }
+
+    @Override
+    protected Timer newTimer(Meter.Id id, DistributionStatisticConfig distributionStatisticConfig, PauseDetector pauseDetector) {
+        return new StepTimer(id, clock, distributionStatisticConfig, pauseDetector, getBaseTimeUnit(),
+            this.config.step().toMillis(), false);
+    }
+
+    @Override
+    protected DistributionSummary newDistributionSummary(Meter.Id id, DistributionStatisticConfig distributionStatisticConfig, double scale) {
+        return new StepDistributionSummary(id, clock, distributionStatisticConfig, scale,
+            config.step().toMillis(),false);
     }
 
     @Override
@@ -211,6 +240,7 @@ public class InfluxMeterRegistry extends StepMeterRegistry {
     }
 
     private Stream<String> writeTimer(Timer timer) {
+
         final Stream<Field> fields = Stream.of(
                 new Field("sum", timer.totalTime(getBaseTimeUnit())),
                 new Field("count", timer.count()),
@@ -218,7 +248,9 @@ public class InfluxMeterRegistry extends StepMeterRegistry {
                 new Field("upper", timer.max(getBaseTimeUnit()))
         );
 
-        return Stream.of(influxLineProtocol(timer.getId(), "histogram", fields));
+        final Stream<Field> totalFields = writePercentiles(timer, fields);
+
+        return Stream.of(influxLineProtocol(timer.getId(), "histogram", totalFields));
     }
 
     private Stream<String> writeSummary(DistributionSummary summary) {
@@ -229,7 +261,24 @@ public class InfluxMeterRegistry extends StepMeterRegistry {
                 new Field("upper", summary.max())
         );
 
-        return Stream.of(influxLineProtocol(summary.getId(), "histogram", fields));
+        final Stream<Field> totalFields = writePercentiles(summary, fields);
+        return Stream.of(influxLineProtocol(summary.getId(), "histogram", totalFields));
+    }
+
+    private Stream<Field> writePercentiles(HistogramSupport histogramSupport, Stream<Field> fields) {
+        Stream<Field> totalFields;
+        final ValueAtPercentile[] percentileValues = histogramSupport.takeSnapshot().percentileValues();
+        if (percentileValues.length > 0) {
+            List<Field> quantiles = new ArrayList<>(percentileValues.length);
+            for (ValueAtPercentile v : percentileValues) {
+                quantiles.add(new Field("phi" + v.percentile(), v.value(getBaseTimeUnit())));
+            }
+            totalFields = Stream.concat(fields, quantiles.stream());
+        }
+        else {
+            totalFields = fields;
+        }
+        return totalFields;
     }
 
     private String influxLineProtocol(Meter.Id id, String metricType, Stream<Field> fields) {
