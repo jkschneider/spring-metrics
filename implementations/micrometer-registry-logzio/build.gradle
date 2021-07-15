@@ -1,0 +1,30 @@
+buildscript {
+    repositories {
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'com.google.protobuf:protobuf-gradle-plugin:0.8.13'
+    }
+}
+
+apply plugin: 'java'
+apply plugin: 'com.google.protobuf'
+
+dependencies {
+    api project(':micrometer-core')
+
+    compile "com.google.protobuf:protobuf-java:3.13.0"
+    compile group: 'javax.ws.rs', name: 'javax.ws.rs-api', version: '2.0'
+    compile group: 'org.javatuples', name: 'javatuples', version: '1.2'
+
+    implementation 'org.slf4j:slf4j-api'
+    implementation 'org.xerial.snappy:snappy-java:1.1.8.2'
+
+    testImplementation project(':micrometer-test')
+    testImplementation 'org.testcontainers:junit-jupiter'
+    testImplementation 'com.jayway.jsonpath:json-path:latest.release'
+    testImplementation 'ch.qos.logback:logback-classic'
+    testImplementation 'org.awaitility:awaitility'
+
+    testCompile group: 'junit', name: 'junit', version: '4.12'
+}
