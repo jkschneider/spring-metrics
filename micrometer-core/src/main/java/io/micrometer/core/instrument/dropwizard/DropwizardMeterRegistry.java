@@ -15,6 +15,7 @@
  */
 package io.micrometer.core.instrument.dropwizard;
 
+import com.codahale.metrics.ExponentiallyDecayingReservoir;
 import com.codahale.metrics.Gauge;
 import com.codahale.metrics.MetricRegistry;
 import io.micrometer.core.instrument.*;
@@ -101,7 +102,7 @@ public abstract class DropwizardMeterRegistry extends MeterRegistry {
 
     @Override
     protected Timer newTimer(Meter.Id id, DistributionStatisticConfig distributionStatisticConfig, PauseDetector pauseDetector) {
-        DropwizardTimer timer = new DropwizardTimer(id, registry.timer(hierarchicalName(id)), clock, distributionStatisticConfig, pauseDetector);
+        DropwizardTimer timer = new DropwizardTimer(id, registry.timer(hierarchicalName(id), () -> new com.codahale.metrics.Timer(new ExponentiallyDecayingReservoir(), dropwizardClock)), clock, distributionStatisticConfig, pauseDetector);
         HistogramGauges.registerWithCommonFormat(timer, this);
         return timer;
     }
