@@ -1,0 +1,8 @@
+dependencies {
+    api project(':micrometer-core')
+
+    api 'software.amazon.awssdk:timestreamwrite'
+    implementation 'org.slf4j:slf4j-api'
+
+    testImplementation project(':micrometer-test')
+}
