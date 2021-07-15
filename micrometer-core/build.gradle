@@ -97,6 +97,10 @@ dependencies {
     testImplementation 'org.testcontainers:testcontainers'
     testImplementation 'org.testcontainers:junit-jupiter'
     testImplementation 'org.testcontainers:kafka'
+
+    // Postgres Binder IT dependencies
+    testImplementation 'org.testcontainers:postgresql'
+    testImplementation 'org.postgresql:postgresql'
 }
 
 task shenandoahTest(type: Test) {

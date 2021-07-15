@@ -75,7 +75,9 @@ def VERSIONS = [
         'org.testcontainers:kafka:latest.release',
         'org.testcontainers:testcontainers:latest.release',
         'ru.lanwen.wiremock:wiremock-junit5:latest.release',
-        'software.amazon.awssdk:cloudwatch:latest.release'
+        'software.amazon.awssdk:cloudwatch:latest.release',
+        'org.testcontainers:postgresql:latest.release',
+        'org.postgresql:postgresql:latest.release'
 ]
 
 subprojects {
