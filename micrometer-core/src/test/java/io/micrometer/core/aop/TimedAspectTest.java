@@ -288,6 +288,29 @@ class TimedAspectTest {
                     .longTaskTimer();
         });
     }
+    
+    @Test
+    void multipleTimedAnnotations() {
+        MeterRegistry registry = new SimpleMeterRegistry();
+
+        AspectJProxyFactory pf = new AspectJProxyFactory(new MultipleTimedService());
+        pf.addAspect(new TimedAspect(registry));
+
+        MultipleTimedService service = pf.getProxy();
+
+        service.call();
+
+        assertThat(registry.get("call")
+                .tag("class", "io.micrometer.core.aop.TimedAspectTest$MultipleTimedService")
+                .tag("method", "call")
+                .tag("extra", "tag")
+                .timer().count()).isEqualTo(1);
+        assertThat(registry.get("longCall")
+                .tag("class", "io.micrometer.core.aop.TimedAspectTest$MultipleTimedService")
+                .tag("method", "call")
+                .tag("extra", "tag")
+                .longTaskTimers().size()).isEqualTo(1);
+    }
 
     private final class FailingMeterRegistry extends SimpleMeterRegistry {
         private FailingMeterRegistry() {
@@ -328,6 +351,14 @@ class TimedAspectTest {
         @Timed(value = "longCall", extraTags = {"extra", "tag"}, longTask = true)
         CompletableFuture<?> longCall(GuardedResult guardedResult) {
             return supplyAsync(guardedResult::get);
+        }
+    }
+    
+    static class MultipleTimedService {
+        @Timed(value = "call", extraTags = {"extra", "tag"})
+        @Timed(value = "longCall", extraTags = {"extra", "tag"}, longTask = true)
+        void call() {
+            
         }
     }
 
