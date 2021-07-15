@@ -123,6 +123,18 @@ class InfluxMeterRegistryTest {
     }
 
     @Test
+    void mapOneTagAsInfluxField() {
+        String expectedInfluxLine = "my_gauge,tagA=valA,tagC=valC,metric_type=gauge value=42.1,tagB=\"valB\" 1";
+
+        InfluxTagMapper mapper = (id, tag) -> tag.getKey().equals("tagB");
+        InfluxMeterRegistry meterRegistry = new InfluxMeterRegistry.Builder(config).clock(clock).tagMapper(mapper).build();
+        meterRegistry.gauge("my.gauge", Tags.of("tagA", "valA").and("tagB", "valB").and("tagC", "valC"), 42.0);
+        final Gauge gauge = meterRegistry.find("my.gauge").gauge();
+
+        assertThat(meterRegistry.writeGauge(gauge.getId(), 42.1).collect(Collectors.joining())).isEqualTo(expectedInfluxLine);
+    }
+
+    @Test
     void writeCustomMeter() {
         String expectedInfluxLine = "my_custom,metric_type=other value=23,value=13,total=5 1";
 
