@@ -33,41 +33,87 @@ import static java.util.stream.Collectors.toList;
  * @author Johnny Lim
  */
 class MicrometerCollector extends Collector implements Collector.Describable {
+
+    static final class TagsHolder {
+        final List<String> keys;
+        final List<String> values;
+
+        private TagsHolder(List<String> keys, List<String> values) {
+            this.keys = keys;
+            this.values = values;
+        }
+
+        static TagsHolder from(List<Tag> tags) {
+            Objects.requireNonNull(tags, "tags");
+
+            List<String> keys = new ArrayList<>(tags.size());
+            List<String> values = new ArrayList<>(tags.size());
+
+            for (Tag tag : tags) {
+                keys.add(tag.getKey());
+                values.add(tag.getValue());
+            }
+
+            return new TagsHolder(
+                    Collections.unmodifiableList(keys),
+                    Collections.unmodifiableList(values)
+            );
+        }
+
+        public List<String> getKeys() {
+            return keys;
+        }
+
+        public List<String> getValues() {
+            return values;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            TagsHolder that = (TagsHolder) o;
+            return keys.equals(that.keys) && values.equals(that.values);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(keys, values);
+        }
+    }
+
     private final Meter.Id id;
-    private final Map<List<String>, Child> children = new ConcurrentHashMap<>();
+    private final Map<TagsHolder, Child> children = new ConcurrentHashMap<>();
     private final String conventionName;
-    private final List<String> tagKeys;
     private final String help;
 
     public MicrometerCollector(Meter.Id id, NamingConvention convention, PrometheusConfig config) {
         this.id = id;
         this.conventionName = id.getConventionName(convention);
-        this.tagKeys = id.getConventionTags(convention).stream().map(Tag::getKey).collect(toList());
         this.help = config.descriptions() ? Optional.ofNullable(id.getDescription()).orElse(" ") : " ";
     }
 
-    public void add(List<String> tagValues, Child child) {
-        children.put(tagValues, child);
+    public void add(List<Tag> tags, Child child) {
+        children.put(TagsHolder.from(tags), child);
     }
 
-    public void remove(List<String> tagValues) {
-        children.remove(tagValues);
+    public void remove(List<Tag> tags) {
+        children.remove(TagsHolder.from(tags));
     }
 
     public boolean isEmpty() {
         return children.isEmpty();
     }
 
-    public List<String> getTagKeys() {
-        return tagKeys;
-    }
-
     @Override
     public List<MetricFamilySamples> collect() {
         Map<String, Family> families = new HashMap<>();
 
-        for (Child child : children.values()) {
-            child.samples(conventionName, tagKeys).forEach(family -> {
+        for (Map.Entry<TagsHolder, Child> e : children.entrySet()) {
+            TagsHolder tags = e.getKey();
+            Child child = e.getValue();
+
+            child.samples(conventionName, tags).forEach(family -> {
                 families.compute(family.getConventionName(), (name, matchingFamily) -> matchingFamily != null ?
                         matchingFamily.addSamples(family.samples) : family);
             });
@@ -107,7 +153,7 @@ class MicrometerCollector extends Collector implements Collector.Describable {
     }
 
     interface Child {
-        Stream<Family> samples(String conventionName, List<String> tagKeys);
+        Stream<Family> samples(String conventionName, TagsHolder tags);
     }
 
     static class Family {

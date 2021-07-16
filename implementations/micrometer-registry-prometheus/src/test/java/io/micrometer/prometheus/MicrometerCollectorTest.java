@@ -18,6 +18,7 @@ package io.micrometer.prometheus;
 import io.micrometer.core.Issue;
 import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.Metrics;
+import io.micrometer.core.instrument.Tag;
 import io.micrometer.core.instrument.config.NamingConvention;
 import io.prometheus.client.Collector;
 import org.junit.jupiter.api.Test;
@@ -54,14 +55,71 @@ class MicrometerCollectorTest {
         MicrometerCollector collector = new MicrometerCollector(id, NamingConvention.dot, PrometheusConfig.DEFAULT);
 
         Collector.MetricFamilySamples.Sample sample = new Collector.MetricFamilySamples.Sample("my_counter",
-                asList("k", "k2"), asList("v1", "v2"), 1.0);
+                asList("k1", "k2"), asList("v1", "v2"), 1.0);
         Collector.MetricFamilySamples.Sample sample2 = new Collector.MetricFamilySamples.Sample("my_counter",
-                asList("k", "k2"), asList("v2", "v1"), 1.0);
+                asList("k1", "k2"), asList("v2", "v1"), 1.0);
 
-        collector.add(asList("v1", "v2"), (conventionName, tagKeys) -> Stream.of(new MicrometerCollector.Family(Collector.Type.COUNTER,
+        collector.add(asList(Tag.of("k1", "v1"), Tag.of("k2", "v2")), (conventionName, tags) -> Stream.of(new MicrometerCollector.Family(Collector.Type.COUNTER,
                 "my_counter", sample)));
-        collector.add(asList("v2", "v1"), (conventionName, tagKeys) -> Stream.of(new MicrometerCollector.Family(Collector.Type.COUNTER,
+        collector.add(asList(Tag.of("k2", "v2"), Tag.of("k1", "v1")), (conventionName, tags) -> Stream.of(new MicrometerCollector.Family(Collector.Type.COUNTER,
                 "my_counter", sample2)));
+
+        assertThat(collector.collect().get(0).samples).hasSize(2);
+    }
+
+    @Issue("#877")
+    @Test
+    void sameMetricDifferentTagKeysCounter() {
+        Meter.Id id = Metrics.counter("my.counter").getId();
+        MicrometerCollector collector = new MicrometerCollector(id, NamingConvention.dot, PrometheusConfig.DEFAULT);
+
+        Collector.MetricFamilySamples.Sample sample = new Collector.MetricFamilySamples.Sample("my_counter",
+                asList("k1", "k2", "k3"), asList("v1", "v2", "v3"), 1.0);
+        Collector.MetricFamilySamples.Sample sample2 = new Collector.MetricFamilySamples.Sample("my_counter",
+                asList("k1", "k4"), asList("v1", "v4"), 1.0);
+
+        collector.add(asList(Tag.of("k1", "v1"), Tag.of("k2", "v2"), Tag.of("k3", "v3")),
+                (conventionName, tags) -> Stream.of(new MicrometerCollector.Family(Collector.Type.COUNTER, "my_counter", sample)));
+        collector.add(asList(Tag.of("k1", "v1"), Tag.of("k4", "v4")),
+                (conventionName, tags) -> Stream.of(new MicrometerCollector.Family(Collector.Type.COUNTER, "my_counter", sample2)));
+
+        assertThat(collector.collect().get(0).samples).hasSize(2);
+    }
+
+    @Issue("#877")
+    @Test
+    void oneSampleHasSubsetOfTagKeysOfAnotherSample() {
+        Meter.Id id = Metrics.counter("my.counter").getId();
+        MicrometerCollector collector = new MicrometerCollector(id, NamingConvention.dot, PrometheusConfig.DEFAULT);
+
+        Collector.MetricFamilySamples.Sample sample = new Collector.MetricFamilySamples.Sample("my_counter",
+                asList("k1", "k2", "k3"), asList("v1", "v2", "v3"), 1.0);
+        Collector.MetricFamilySamples.Sample sample2 = new Collector.MetricFamilySamples.Sample("my_counter",
+                asList("k1", "k2"), asList("v1", "v2"), 1.0);
+
+        collector.add(asList(Tag.of("k1", "v1"), Tag.of("k2", "v2"), Tag.of("k3", "v3")),
+                (conventionName, tags) -> Stream.of(new MicrometerCollector.Family(Collector.Type.COUNTER, "my_counter", sample)));
+        collector.add(asList(Tag.of("k1", "v1"), Tag.of("k2", "v2")),
+                (conventionName, tags) -> Stream.of(new MicrometerCollector.Family(Collector.Type.COUNTER, "my_counter", sample2)));
+
+        assertThat(collector.collect().get(0).samples).hasSize(2);
+    }
+
+    @Issue("#877")
+    @Test
+    void sameMetricNameWithNoTagsAndAListOfTags() {
+        Meter.Id id = Metrics.counter("my.counter").getId();
+        MicrometerCollector collector = new MicrometerCollector(id, NamingConvention.dot, PrometheusConfig.DEFAULT);
+
+        Collector.MetricFamilySamples.Sample sample = new Collector.MetricFamilySamples.Sample("my_counter",
+                asList("k1", "k2", "k3"), asList("v1", "v2", "v3"), 1.0);
+        Collector.MetricFamilySamples.Sample sample2 = new Collector.MetricFamilySamples.Sample("my_counter",
+                Collections.emptyList(), Collections.emptyList(), 1.0);
+
+        collector.add(asList(Tag.of("k1", "v1"), Tag.of("k2", "v2"), Tag.of("k3", "v3")),
+                (conventionName, tags) -> Stream.of(new MicrometerCollector.Family(Collector.Type.COUNTER, "my_counter", sample)));
+        collector.add(Collections.emptyList(),
+                (conventionName, tags) -> Stream.of(new MicrometerCollector.Family(Collector.Type.COUNTER, "my_counter", sample2)));
 
         assertThat(collector.collect().get(0).samples).hasSize(2);
     }

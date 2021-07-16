@@ -34,7 +34,6 @@ import java.util.Collections;
 import java.util.Enumeration;
 import java.util.HashSet;
 import java.util.List;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -67,24 +66,26 @@ class PrometheusMeterRegistryTest {
     }
 
     @Test
-    void meterRegistrationFailedListenerCalledOnSameNameDifferentTags() throws InterruptedException {
-        CountDownLatch failedLatch = new CountDownLatch(1);
-        registry.config().onMeterRegistrationFailed((id, reason) -> failedLatch.countDown());
-        registry.counter("my.counter");
-        registry.counter("my.counter", "k", "v").increment();
+    void counterWithTheSameNameDifferentTagsRegistered() {
+        registry.counter("my.counter", "k", "v", "k2", "v2").increment();
+        registry.counter("my.counter", "k1", "v1").increment();
 
-        assertThat(failedLatch.await(1, TimeUnit.SECONDS)).isTrue();
+        assertThat(registry.getMeters().size()).isEqualTo(2);
+        assertThat(registry.counter("my.counter", "k", "v", "k2", "v2").count()).isEqualTo(1.0, offset(0.1));
+        assertThat(registry.counter("my.counter", "k1", "v1").count()).isEqualTo(1.0, offset(0.1));
+    }
 
-        assertThatThrownBy(() -> registry
-                .throwExceptionOnRegistrationFailure()
-                .counter("my.counter", "k1", "v1")
-        )
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageStartingWith("Prometheus requires that all meters with the same name have the same set of tag keys.");
+    @Test
+    void gaugeWithTheSameNameDifferentTagsRegistered() {
+        AtomicInteger n = new AtomicInteger();
+        Gauge.builder("my.gauge", n, AtomicInteger::get).tags("k1", "v1").baseUnit(BaseUnits.BYTES).register(registry);
+        Gauge.builder("my.gauge", n, AtomicInteger::get).tags("k1", "v11", "k2", "v2").baseUnit(BaseUnits.BYTES).register(registry);
 
-        assertThatThrownBy(() -> registry.counter("my.counter", "k2", "v2"))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageStartingWith("Prometheus requires that all meters with the same name have the same set of tag keys.");
+        assertThat(registry.getMeters().size()).isEqualTo(2);
+        assertThat(prometheusRegistry.getSampleValue("my_gauge_bytes", new String[]{"k1"}, new String[]{"v1"}))
+                .isEqualTo(1.0, offset(1.0));
+        assertThat(prometheusRegistry.getSampleValue("my_gauge_bytes", new String[]{"k1", "k2"}, new String[]{"v11", "v2"}))
+                .isEqualTo(1.0, offset(1.0));
     }
 
     @Test
